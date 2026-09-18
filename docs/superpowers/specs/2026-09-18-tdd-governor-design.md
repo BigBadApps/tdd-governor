@@ -34,7 +34,8 @@ residue, and only once calibrated on real data.** Nothing fails open.
 
 Standalone TypeScript/Node CLI in its own repo (`/Volumes/BigBadDrive_1/tdd-governor`),
 installed into client repos as a dev dependency. The pytest adapter shells out to
-`pytest`; there is no Python codebase to maintain.
+`pytest`. Its only Python is one small plugin file (`python/tdd_governor_pytest.py`)
+that writes ledger records.
 
 ```
 governor run            # run the suite via the adapter, append to ledger
@@ -108,8 +109,9 @@ The adapter ships a **custom vitest reporter** that the client adds to
 `includeTaskLocation: true`). Every vitest run writes one ledger record, whoever
 started it. `governor run` is a convenience wrapper, not a requirement.
 
-The reporter hook name must be checked against the installed vitest version
-(BigBadPlayground: vitest 3.0.x) during Stage 1. Do not assume it.
+Reporter hook: `onTestRunEnd(testModules, unhandledErrors, reason)`. Checked against
+BigBadPlayground's installed vitest 3.2.7 on 2026-09-18 (`onFinished` is deprecated).
+Stage 1's integration test against real vitest is the proof.
 
 ### Classification (`classify.ts`)
 
@@ -136,9 +138,12 @@ client onboarding notes.
 
 ### 4.1 Red-before-green (pre-commit)
 
-- **Scope:** test ids whose declaration lines fall inside added/changed hunks of
-  the staged diff (via `TestResult.line` from the most recent ledger run). New test
-  files: every test in the file.
+- **Scope:** test ids whose *span* contains an added line of the staged diff. Test
+  spans come from `TestResult.line` in the most recent ledger run: a test spans from
+  its declaration line up to the line before the next test in the same file.
+  Changes above the first test (imports, helpers) touch no test. New test files:
+  every test in the file. A new test file that has no tests in the ledger → BLOCK
+  ("never run").
 - **PASS** per test: the ledger holds a record since the branch merge-base where that
   id has `status: 'fail'` and `failureKind: 'assertion'`.
 - **BLOCK:** no failing record, or the only failures are `collection_error` /
@@ -257,6 +262,8 @@ Tracked deliberately. Each has a fix path; none is fixed in Stages 1–4 unless 
 | G4 | Jev deferred, so the `UNDECIDED` rate is unknown and may block often | Friction, more overrides | Stage 5. Until then, override reasons in the ledger measure the friction. | Stage 5 |
 | G5 | ~~Runs outside `governor run` not recorded~~ | — | **Resolved in design:** vitest reporter / pytest plugin records every run | Stage 1 / 4 |
 | G6 | Calling an unimplemented function is `runtime_error`, not a valid red | Agents must write a stub first | Documented in onboarding. Revisit if override logs show it's a common friction source. | Monitor |
+| G7 | Green gate runs the working tree, not the staged snapshot. Unstaged fixes can make a broken commit pass. | False PASS on partial staging | Run in a temp worktree of the staged tree (`git stash --keep-index` is too risky) | When observed |
+| G8 | Test spans are inferred from declaration lines, and line numbers come from the last run, not the staged content | Out-of-date spans after edits made since the last run | Parse test files for exact spans (TS: AST; pytest: `ast`) | When observed |
 
 ## 10. Track A disposition
 
