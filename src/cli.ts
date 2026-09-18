@@ -10,14 +10,14 @@ import { diffAudit } from './gates/diff-audit.js';
 import { green } from './gates/green.js';
 import { mutation } from './gates/mutation.js';
 import { redBeforeGreen } from './gates/red-before-green.js';
-import { changedLines, evidenceSince, pushBase, pushDiff, repoRoot, stagedDiff } from './git.js';
+import { changedLines, ciBase, evidenceSince, pushBase, pushDiff, repoRoot, stagedDiff } from './git.js';
 import { installHooks } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
 import { runStryker } from './mutation/stryker.js';
 import { decide, formatResults } from './report.js';
 import type { GateResult, RunOutcome } from './types.js';
 
-const USAGE = 'usage: governor <run | gate commit | gate push | install>';
+const USAGE = 'usage: governor <run | gate commit | gate push | gate ci | install>';
 const EXAMPLE_CONFIG = JSON.stringify(
   {
     adapter: 'vitest',
@@ -123,9 +123,34 @@ function gatePush(root: string): number {
   return finish(root, config, [mutationGate(root, config, pushDiff(root, base))], process.env.GOVERNOR_OVERRIDE);
 }
 
+function gateCi(root: string, baseFlag: string | undefined): number {
+  const loaded = loadConfig(root);
+  if (!loaded.ok) {
+    console.log(formatResults([{ gate: 'green', status: 'GATE_UNAVAILABLE', findings: [{ file: '.governor/config.json', message: loaded.error }] }]));
+    return 1;
+  }
+  const { config } = loaded;
+  let diff: FileDiff[];
+  try {
+    diff = pushDiff(root, ciBase(root, baseFlag));
+  } catch (e) {
+    console.error(`governor: ${(e as Error).message}`);
+    return 2;
+  }
+  if (process.env.GOVERNOR_OVERRIDE !== undefined) console.log('governor: GOVERNOR_OVERRIDE is ignored in CI');
+  console.log('red-before-green: skipped in CI (needs local ledger, G3)');
+  const isTestFile = picomatch(config.testGlobs);
+  const results = [
+    green(runTests(config, root)),
+    diffAudit({ diff, isTestFile }),
+    config.mutation.enabled ? mutationGate(root, config, diff) : MUTATION_DISABLED,
+  ];
+  return finish(root, config, results, undefined);
+}
+
 export function main(argv: string[]): number {
   const [command, ...rest] = argv;
-  const known = command === 'run' || command === 'install' || (command === 'gate' && (rest[0] === 'commit' || rest[0] === 'push'));
+  const known = command === 'run' || command === 'install' || (command === 'gate' && (rest[0] === 'commit' || rest[0] === 'push' || rest[0] === 'ci'));
   if (!known) {
     console.error(USAGE);
     return 2;
@@ -153,6 +178,15 @@ export function main(argv: string[]): number {
     const failed = tests.filter((t) => t.status === 'fail').length;
     console.log(`governor: recorded run ${outcome.record.runId}: ${tests.length} tests, ${failed} failed, ${collectionErrors.length} collection errors`);
     return outcome.record.exitCode;
+  }
+
+  if (command === 'gate' && rest[0] === 'ci') {
+    const i = rest.indexOf('--base');
+    if (i !== -1 && !rest[i + 1]) {
+      console.error('usage: governor gate ci [--base <ref>]');
+      return 2;
+    }
+    return gateCi(root, i === -1 ? undefined : rest[i + 1]);
   }
 
   if (command === 'gate' && (rest[0] === 'commit' || rest[0] === 'push')) return rest[0] === 'push' ? gatePush(root) : gateCommit(root);
