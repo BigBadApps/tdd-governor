@@ -1,0 +1,7 @@
+{
+  "adapter": "vitest",
+  "testGlobs": ["test/**/*.test.ts"],
+  "sourceGlobs": ["src/**/*.ts"],
+  "mutation": { "enabled": false, "timeoutMs": 300000 },
+  "runTimeoutMs": 120000
+}
