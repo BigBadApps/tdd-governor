@@ -90,4 +90,34 @@ describe('redBeforeGreen', () => {
     ];
     expect(redBeforeGreen({ diff, isTestFile, records: [], sinceIso: SINCE }).status).toBe('PASS');
   });
+
+  it('blocks when one file is BLOCK and another is UNDECIDED (BLOCK wins)', () => {
+    const G = 'tests/other.test.ts';
+    const records = [
+      run('2026-09-18T02:00:00.000Z', [
+        t('adds', 5, 'pass'),
+        { id: `${G} > z`, file: G, line: 5, status: 'fail', failureKind: 'unknown' },
+      ]),
+    ];
+    const diff: FileDiff[] = [
+      ...modifiedAt(5),
+      { path: G, status: 'modified', added: [{ line: 5, text: 'x' }], removed: [] },
+    ];
+    expect(redBeforeGreen({ diff, isTestFile, records, sinceIso: SINCE }).status).toBe('BLOCK');
+  });
+
+  it('takes the test layout from the most recent run that recorded the file', () => {
+    const records = [
+      run('2026-09-18T01:00:00.000Z', [t('adds', 5, 'pass'), t('subs', 12, 'fail', 'assertion')]),
+      run('2026-09-18T02:00:00.000Z', [t('adds', 5, 'pass'), t('subs', 20, 'pass')]),
+    ];
+    const r = redBeforeGreen({ diff: modifiedAt(15), isTestFile, records, sinceIso: SINCE });
+    expect(r.status).toBe('BLOCK');
+    expect(r.findings[0]!.message).toMatch(/adds: never seen failing/);
+  });
+
+  it('does not judge a removal-only edit to a test file (diff audit owns removals)', () => {
+    const diff: FileDiff[] = [{ path: F, status: 'modified', added: [], removed: [{ line: 1, text: 'x' }] }];
+    expect(redBeforeGreen({ diff, isTestFile, records: [], sinceIso: SINCE }).status).toBe('PASS');
+  });
 });
