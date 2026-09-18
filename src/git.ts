@@ -27,3 +27,24 @@ export function evidenceSince(root: string, base = 'main'): string {
   }
   return new Date(git(root, ['show', '-s', '--format=%cI', mergeBase]).trim()).toISOString();
 }
+
+export function pushBase(root: string, base = 'main'): string {
+  try {
+    return git(root, ['rev-parse', '--verify', '--quiet', '@{upstream}']).trim();
+  } catch {
+    return git(root, ['merge-base', 'HEAD', base]).trim();
+  }
+}
+
+export function pushDiff(root: string, baseSha: string): FileDiff[] {
+  return parseUnifiedDiff(git(root, ['diff', '-U0', '--no-color', '--no-renames', '--no-ext-diff', `${baseSha}..HEAD`]));
+}
+
+export function changedLines(diff: FileDiff[], include: (path: string) => boolean): Map<string, Set<number>> {
+  const map = new Map<string, Set<number>>();
+  for (const f of diff) {
+    if (f.status === 'deleted' || f.added.length === 0 || !include(f.path)) continue;
+    map.set(f.path, new Set(f.added.map((a) => a.line)));
+  }
+  return map;
+}
