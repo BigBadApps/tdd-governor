@@ -1,2 +1,8 @@
+node_modules/
+dist/
+.governor/ledger.jsonl
+reports/
+.stryker-tmp/
 .DS_Store
 .superpowers/
+.worktrees/
