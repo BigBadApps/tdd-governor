@@ -1,0 +1,37 @@
+# Copy to .github/workflows/governor.yml in a client repo.
+#
+# Setup:
+#   1. Add the repo secret GOVERNOR_READ_TOKEN: a fine-grained PAT with read-only
+#      "Contents" access to BigBadApps/tdd-governor.
+#   2. Replace GOVERNOR_SHA below with a tdd-governor commit that includes `gate ci`.
+#   3. The client's vitest.config.ts must resolve the reporter from GOVERNOR_HOME.
+#   4. To make the check block merges, require "governor / gate" in branch protection
+#      and protect .github/workflows/.
+#
+# Limits: PRs from forks have no access to the secret, so the job fails for them.
+name: governor
+on:
+  pull_request:
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fetch and build the governor
+        env:
+          GOVERNOR_READ_TOKEN: ${{ secrets.GOVERNOR_READ_TOKEN }}
+        run: |
+          git clone --quiet "https://x-access-token:${GOVERNOR_READ_TOKEN}@github.com/BigBadApps/tdd-governor.git" "$RUNNER_TEMP/governor"
+          git -C "$RUNNER_TEMP/governor" checkout --quiet GOVERNOR_SHA
+          npm ci --prefix "$RUNNER_TEMP/governor"
+          npm run build --prefix "$RUNNER_TEMP/governor"
+      - run: npm ci
+      - name: Gate
+        env:
+          GOVERNOR_HOME: ${{ runner.temp }}/governor
+        run: node "$GOVERNOR_HOME/dist/cli.js" gate ci
