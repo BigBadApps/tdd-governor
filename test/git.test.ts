@@ -19,19 +19,22 @@ describe('ciBase', () => {
     const base = g('rev-parse', 'HEAD');
     g('checkout', '-q', '-b', 'feature');
     writeFileSync(path.join(root, 'a.ts'), 'one\ntwo\n');
+    g('commit', '-qam', 'dev');
+    const dev = g('rev-parse', 'HEAD');
+    g('update-ref', 'refs/remotes/origin/develop', dev);
+    writeFileSync(path.join(root, 'a.ts'), 'one\ntwo\nthree\n');
     g('commit', '-qam', 'change');
-    return { root, g, base };
+    return { root, g, base, dev };
   }
 
   it('uses the --base flag', () => {
     const { root, base } = repo();
-    expect(ciBase(root, 'main', {})).toBe(base);
+    expect(ciBase(root, 'main', { GITHUB_BASE_REF: 'develop' })).toBe(base);
   });
 
   it('uses origin/$GITHUB_BASE_REF when there is no flag', () => {
-    const { root, g, base } = repo();
-    g('update-ref', 'refs/remotes/origin/develop', base);
-    expect(ciBase(root, undefined, { GITHUB_BASE_REF: 'develop' })).toBe(base);
+    const { root, dev } = repo();
+    expect(ciBase(root, undefined, { GITHUB_BASE_REF: 'develop' })).toBe(dev);
   });
 
   it('falls back to main', () => {

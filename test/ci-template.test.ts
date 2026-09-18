@@ -7,8 +7,10 @@ const template = readFileSync(path.resolve(__dirname, '../templates/governor-ci.
 describe('governor-ci.yml template', () => {
   it.each([
     'fetch-depth: 0',
-    'GOVERNOR_READ_TOKEN',
-    'GOVERNOR_HOME',
+    'GOVERNOR_READ_TOKEN: ${{ secrets.GOVERNOR_READ_TOKEN }}',
+    'GOVERNOR_HOME: ${{ runner.temp }}/governor',
+    'permissions:',
+    'contents: read',
     'gate ci',
     'node-version: 22',
     'pull_request',

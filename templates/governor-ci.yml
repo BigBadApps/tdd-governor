@@ -7,14 +7,25 @@
 #   3. The client's vitest.config.ts must resolve the reporter from GOVERNOR_HOME.
 #   4. To make the check block merges, require "governor / gate" in branch protection
 #      and protect .github/workflows/.
+#   5. The client needs Stryker installed and configured (`@stryker-mutator/core`,
+#      `@stryker-mutator/vitest-runner`, a `stryker.config.json`), or
+#      `mutation.enabled: false` in `.governor/config.json`; otherwise the mutation
+#      gate reports GATE_UNAVAILABLE and every PR fails.
 #
-# Limits: PRs from forks have no access to the secret, so the job fails for them.
+# Trigger is pull_request only: GITHUB_BASE_REF is empty on other events, so `gate ci`
+# would fall back to `main` and diff almost nothing. Do not add other triggers without
+# passing --base.
+#
+# Limits: PRs from forks and Dependabot PRs have no access to the secret, so the job
+# fails for them.
 name: governor
 on:
   pull_request:
 jobs:
   gate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
         with:
