@@ -90,6 +90,7 @@ export default class GovernorReporter implements Reporter {
     unhandledErrors: ReadonlyArray<ErrorLike>,
     reason: 'passed' | 'failed' | 'interrupted',
   ): void {
+    if (process.env.GOVERNOR_DISABLE_REPORTER) return; // Stryker's internal runs must not pollute the ledger
     const record = buildRecord({
       root: this.root,
       runId: process.env.GOVERNOR_RUN_ID ?? randomUUID(),
