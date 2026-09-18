@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-18
 **Status:** Approved design, pre-implementation
-**Origin:** Refines `BigBadPlayground/docs/concepts/track_a_elite_coding_governor_specification.md` ("Track A")
+**Origin:** Refines `docs/concepts/track_a_elite_coding_governor_specification.md` ("Track A")
 **Clients:** BigBadPlayground (vitest, stages 1–3), BigBadPhotos (pytest, stage 4)
 
 ## 1. Purpose
