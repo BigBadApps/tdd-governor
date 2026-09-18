@@ -12,6 +12,38 @@ export interface FileDiff {
 
 const HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/;
 
+const ESCAPES: Record<string, number> = { a: 7, b: 8, t: 9, n: 10, v: 11, f: 12, r: 13, '"': 34, '\\': 92 };
+
+// Undo git's C-style path quoting ("t\303\251st.ts" -> tést.ts).
+function unquote(s: string): string {
+  if (!s.startsWith('"')) return s;
+  const bytes: number[] = [];
+  for (let i = 1; i < s.length - 1; i++) {
+    if (s[i] !== '\\') {
+      bytes.push(...Buffer.from(s[i]!, 'utf8'));
+    } else if (/[0-7]/.test(s[i + 1]!)) {
+      bytes.push(parseInt(s.slice(i + 1, i + 4), 8));
+      i += 3;
+    } else {
+      bytes.push(ESCAPES[s[++i]!] ?? s.charCodeAt(i));
+    }
+  }
+  return Buffer.from(bytes).toString('utf8');
+}
+
+// With --no-renames both sides name the same path, so the header is "<a> <b>" with equal halves.
+// Splitting at the midpoint is exact even when the path contains " b/" or spaces.
+// Anything else throws: a wrong or empty path would make every gate skip the file.
+function headerPath(rest: string): string {
+  const half = (rest.length - 1) / 2;
+  const a = unquote(rest.slice(0, half));
+  const b = unquote(rest.slice(half + 1));
+  if (!a.startsWith('a/') || !b.startsWith('b/') || a.slice(2) !== b.slice(2) || a.length < 3) {
+    throw new Error(`unparseable diff header: diff --git ${rest}`);
+  }
+  return a.slice(2);
+}
+
 export function parseUnifiedDiff(text: string): FileDiff[] {
   const files: FileDiff[] = [];
   let cur: FileDiff | undefined;
@@ -21,8 +53,7 @@ export function parseUnifiedDiff(text: string): FileDiff[] {
 
   for (const raw of text.split('\n')) {
     if (raw.startsWith('diff --git ')) {
-      const m = /^diff --git a\/(.+) b\/(.+)$/.exec(raw);
-      cur = { path: m ? m[2]! : '', status: 'modified', added: [], removed: [] };
+      cur = { path: headerPath(raw.slice('diff --git '.length)), status: 'modified', added: [], removed: [] };
       files.push(cur);
       inHunk = false;
       continue;
@@ -39,7 +70,6 @@ export function parseUnifiedDiff(text: string): FileDiff[] {
       // Header lines only appear before the first hunk of a file.
       if (raw.startsWith('new file mode')) cur.status = 'added';
       else if (raw.startsWith('deleted file mode')) cur.status = 'deleted';
-      else if (raw.startsWith('+++ b/')) cur.path = raw.slice(6);
       continue;
     }
     if (raw.startsWith('+')) cur.added.push({ line: newLine++, text: raw.slice(1) });

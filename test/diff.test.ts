@@ -74,3 +74,31 @@ describe('parseUnifiedDiff', () => {
     expect(parseUnifiedDiff('')).toEqual([]);
   });
 });
+
+// Header shapes captured from real `git diff --cached -U0 --no-color --no-renames --no-ext-diff` (git default core.quotePath).
+const spaced = 'diff --git a/s p.test.ts b/s p.test.ts\nindex 1..2 100644\n--- a/s p.test.ts\t\n+++ b/s p.test.ts\t\n@@ -1,0 +2 @@\n+expect(1)\n';
+const quoted = 'diff --git "a/t\\303\\251st.test.ts" "b/t\\303\\251st.test.ts"\nindex 1..2 100644\n--- "a/t\\303\\251st.test.ts"\n+++ "b/t\\303\\251st.test.ts"\n@@ -1,0 +2 @@\n+expect(1)\n';
+const escaped = 'diff --git "a/q\\"t.test.ts" "b/q\\"t.test.ts"\nnew file mode 100644\nindex 0..1\n--- /dev/null\n+++ "b/q\\"t.test.ts"\n@@ -0,0 +1 @@\n+x\n';
+const deletedBSlash = 'diff --git a/x b/y.test.ts b/x b/y.test.ts\ndeleted file mode 100644\nindex 1..0\n--- a/x b/y.test.ts\t\n+++ /dev/null\n@@ -1 +0,0 @@\n-it(\'a\', () => {})\n';
+
+describe('parseUnifiedDiff paths', () => {
+  it('drops the trailing tab git adds to paths with spaces', () => {
+    expect(parseUnifiedDiff(spaced)[0]!.path).toBe('s p.test.ts');
+  });
+
+  it('unquotes octal-escaped non-ASCII paths', () => {
+    expect(parseUnifiedDiff(quoted)[0]!.path).toBe('tést.test.ts');
+  });
+
+  it('unquotes backslash escapes', () => {
+    expect(parseUnifiedDiff(escaped)[0]!.path).toBe('q"t.test.ts');
+  });
+
+  it('keeps the full path of a deleted file whose name contains " b/"', () => {
+    expect(parseUnifiedDiff(deletedBSlash)[0]).toMatchObject({ path: 'x b/y.test.ts', status: 'deleted' });
+  });
+
+  it('throws on a header it cannot parse instead of emitting a wrong path', () => {
+    expect(() => parseUnifiedDiff('diff --git a/x b/y\n')).toThrow(/unparseable diff header/);
+  });
+});
