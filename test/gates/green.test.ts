@@ -9,7 +9,25 @@ const rec = (over: Partial<LedgerRecord>): LedgerRecord => ({
 
 describe('green gate', () => {
   it('passes a clean run', () => {
-    expect(green({ kind: 'completed', record: rec({}) })).toEqual({ gate: 'green', status: 'PASS', findings: [] });
+    expect(
+      green({
+        kind: 'completed',
+        record: rec({
+          tests: [{ id: 't.test.ts > passes', file: 't.test.ts', status: 'pass' }],
+        }),
+      }),
+    ).toEqual({ gate: 'green', status: 'PASS', findings: [] });
+  });
+
+  it('blocks when run executed zero tests', () => {
+    const r = green({
+      kind: 'completed',
+      record: rec({ tests: [], collectionErrors: [], exitCode: 0 }),
+    });
+    expect(r.status).toBe('BLOCK');
+    expect(r.findings).toEqual([
+      { file: '(runner)', message: 'test run executed no tests (suite emptied or passWithNoTests)' },
+    ]);
   });
 
   it('blocks on failing tests and names them', () => {
