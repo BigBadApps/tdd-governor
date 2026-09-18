@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import picomatch from 'picomatch';
 import { runVitest } from './adapters/vitest/run.js';
 import { loadConfig, type GovernorConfig } from './config.js';
+import type { FileDiff } from './diff.js';
 import { diffAudit } from './gates/diff-audit.js';
 import { green } from './gates/green.js';
 import { mutation } from './gates/mutation.js';
@@ -34,9 +35,9 @@ function runTests(config: GovernorConfig, root: string, extraArgs: string[] = []
   return { kind: 'unavailable', reason: `adapter '${config.adapter}' is not implemented yet` };
 }
 
-function finish(root: string, config: GovernorConfig, results: GateResult[]): number {
+function finish(root: string, config: GovernorConfig, results: GateResult[], override: string | undefined): number {
   console.log(formatResults(results));
-  const decision = decide(results, process.env.GOVERNOR_OVERRIDE);
+  const decision = decide(results, override);
   switch (decision.kind) {
     case 'pass':
       return 0;
@@ -81,7 +82,27 @@ function gateCommit(root: string): number {
     redBeforeGreen({ diff, isTestFile, records, sinceIso }),
     diffAudit({ diff, isTestFile }),
   ];
-  return finish(root, config, results);
+  return finish(root, config, results, process.env.GOVERNOR_OVERRIDE);
+}
+
+const MUTATION_DISABLED: GateResult = {
+  gate: 'mutation',
+  status: 'PASS',
+  findings: [{ file: '.governor/config.json', message: 'warning: mutation gate disabled in .governor/config.json' }],
+};
+
+function mutationGate(root: string, config: GovernorConfig, diff: FileDiff[]): GateResult {
+  const isSource = picomatch(config.sourceGlobs);
+  const isTest = picomatch(config.testGlobs);
+  const changed = changedLines(diff, (p) => isSource(p) && !isTest(p));
+  if (changed.size === 0) return { gate: 'mutation', status: 'PASS', findings: [] };
+
+  const run = config.adapter === 'vitest'
+    ? runStryker(root, [...changed.keys()], config.mutation.timeoutMs)
+    : { ok: false as const, error: `mutation for adapter '${config.adapter}' is not implemented yet` };
+  return run.ok
+    ? mutation({ mutants: run.mutants, changed })
+    : { gate: 'mutation', status: 'GATE_UNAVAILABLE', findings: [{ file: '(mutation)', message: run.error }] };
 }
 
 function gatePush(root: string): number {
@@ -91,11 +112,7 @@ function gatePush(root: string): number {
     return 1;
   }
   const { config } = loaded;
-  if (!config.mutation.enabled) {
-    return finish(root, config, [{ gate: 'mutation', status: 'PASS', findings: [{ file: '.governor/config.json', message: 'warning: mutation gate disabled in .governor/config.json' }] }]);
-  }
-  const isSource = picomatch(config.sourceGlobs);
-  const isTest = picomatch(config.testGlobs);
+  if (!config.mutation.enabled) return finish(root, config, [MUTATION_DISABLED], process.env.GOVERNOR_OVERRIDE);
   let base: string;
   try {
     base = pushBase(root);
@@ -103,16 +120,7 @@ function gatePush(root: string): number {
     console.error(`governor: cannot determine push base: ${(e as Error).message}`);
     return 2;
   }
-  const changed = changedLines(pushDiff(root, base), (p) => isSource(p) && !isTest(p));
-  if (changed.size === 0) return finish(root, config, [{ gate: 'mutation', status: 'PASS', findings: [] }]);
-
-  const run = config.adapter === 'vitest'
-    ? runStryker(root, [...changed.keys()], config.mutation.timeoutMs)
-    : { ok: false as const, error: `mutation for adapter '${config.adapter}' is not implemented yet` };
-  const result = run.ok
-    ? mutation({ mutants: run.mutants, changed })
-    : { gate: 'mutation' as const, status: 'GATE_UNAVAILABLE' as const, findings: [{ file: '(mutation)', message: run.error }] };
-  return finish(root, config, [result]);
+  return finish(root, config, [mutationGate(root, config, pushDiff(root, base))], process.env.GOVERNOR_OVERRIDE);
 }
 
 export function main(argv: string[]): number {
