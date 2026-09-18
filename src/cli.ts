@@ -84,7 +84,18 @@ function gateCommit(root: string): number {
 
 export function main(argv: string[]): number {
   const [command, ...rest] = argv;
-  const root = repoRoot();
+  const known = command === 'run' || command === 'install' || (command === 'gate' && rest[0] === 'commit');
+  if (!known) {
+    console.error(USAGE);
+    return 2;
+  }
+  let root: string;
+  try {
+    root = repoRoot();
+  } catch {
+    console.error('governor: not a git repository');
+    return 2;
+  }
 
   if (command === 'run') {
     const loaded = loadConfig(root);
@@ -117,8 +128,7 @@ export function main(argv: string[]): number {
     return ok ? 0 : 1;
   }
 
-  console.error(USAGE);
-  return 2;
+  return 2; // unreachable: `known` covers every command above
 }
 
 const invokedDirectly = process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);

@@ -1,14 +1,16 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
+const tmpDirs: string[] = [];
 const governorRoot = path.resolve(__dirname, '..');
 const cli = path.join(governorRoot, 'dist', 'cli.js');
 
 function makeRepo(): string {
   const root = mkdtempSync(path.join(tmpdir(), 'gov-e2e-'));
+  tmpDirs.push(root);
   const g = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
   g('init', '-b', 'main', '-q');
   g('config', 'user.email', 'e2e@example.com');
@@ -43,6 +45,31 @@ const runTests = (root: string) => spawnSync('node', [cli, 'run'], { cwd: root, 
 
 beforeAll(() => {
   execFileSync('npm', ['run', 'build'], { cwd: governorRoot, stdio: 'pipe' });
+});
+
+afterAll(() => {
+  tmpDirs.forEach((d) => rmSync(d, { recursive: true, force: true }));
+});
+
+describe('governor outside a git repo', () => {
+  const outside = () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'gov-e2e-'));
+    tmpDirs.push(dir);
+    return dir;
+  };
+
+  it('prints usage for an unknown command', () => {
+    const res = spawnSync('node', [cli], { cwd: outside(), encoding: 'utf8' });
+    expect(res.status).toBe(2);
+    expect(res.stderr).toMatch(/usage: governor/);
+  });
+
+  it('reports a clean error for a real command', () => {
+    const res = spawnSync('node', [cli, 'run'], { cwd: outside(), encoding: 'utf8' });
+    expect(res.status).toBe(2);
+    expect(res.stderr).toMatch(/not a git repository/);
+    expect(res.stderr).not.toMatch(/at .*\.js/);
+  });
 });
 
 describe('governor gate commit (e2e)', () => {
