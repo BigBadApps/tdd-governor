@@ -7,14 +7,16 @@ import { runVitest } from './adapters/vitest/run.js';
 import { loadConfig, type GovernorConfig } from './config.js';
 import { diffAudit } from './gates/diff-audit.js';
 import { green } from './gates/green.js';
+import { mutation } from './gates/mutation.js';
 import { redBeforeGreen } from './gates/red-before-green.js';
-import { evidenceSince, repoRoot, stagedDiff } from './git.js';
+import { changedLines, evidenceSince, pushBase, pushDiff, repoRoot, stagedDiff } from './git.js';
 import { installHooks } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
+import { runStryker } from './mutation/stryker.js';
 import { decide, formatResults } from './report.js';
 import type { GateResult, RunOutcome } from './types.js';
 
-const USAGE = 'usage: governor <run | gate commit | install>';
+const USAGE = 'usage: governor <run | gate commit | gate push | install>';
 const EXAMPLE_CONFIG = JSON.stringify(
   {
     adapter: 'vitest',
@@ -82,9 +84,40 @@ function gateCommit(root: string): number {
   return finish(root, config, results);
 }
 
+function gatePush(root: string): number {
+  const loaded = loadConfig(root);
+  if (!loaded.ok) {
+    console.log(formatResults([{ gate: 'mutation', status: 'GATE_UNAVAILABLE', findings: [{ file: '.governor/config.json', message: loaded.error }] }]));
+    return 1;
+  }
+  const { config } = loaded;
+  if (!config.mutation.enabled) {
+    return finish(root, config, [{ gate: 'mutation', status: 'PASS', findings: [{ file: '.governor/config.json', message: 'warning: mutation gate disabled in .governor/config.json' }] }]);
+  }
+  const isSource = picomatch(config.sourceGlobs);
+  const isTest = picomatch(config.testGlobs);
+  let base: string;
+  try {
+    base = pushBase(root);
+  } catch (e) {
+    console.error(`governor: cannot determine push base: ${(e as Error).message}`);
+    return 2;
+  }
+  const changed = changedLines(pushDiff(root, base), (p) => isSource(p) && !isTest(p));
+  if (changed.size === 0) return finish(root, config, [{ gate: 'mutation', status: 'PASS', findings: [] }]);
+
+  const run = config.adapter === 'vitest'
+    ? runStryker(root, [...changed.keys()], config.mutation.timeoutMs)
+    : { ok: false as const, error: `mutation for adapter '${config.adapter}' is not implemented yet` };
+  const result = run.ok
+    ? mutation({ mutants: run.mutants, changed })
+    : { gate: 'mutation' as const, status: 'GATE_UNAVAILABLE' as const, findings: [{ file: '(mutation)', message: run.error }] };
+  return finish(root, config, [result]);
+}
+
 export function main(argv: string[]): number {
   const [command, ...rest] = argv;
-  const known = command === 'run' || command === 'install' || (command === 'gate' && rest[0] === 'commit');
+  const known = command === 'run' || command === 'install' || (command === 'gate' && (rest[0] === 'commit' || rest[0] === 'push'));
   if (!known) {
     console.error(USAGE);
     return 2;
@@ -114,7 +147,7 @@ export function main(argv: string[]): number {
     return outcome.record.exitCode;
   }
 
-  if (command === 'gate' && rest[0] === 'commit') return gateCommit(root);
+  if (command === 'gate' && (rest[0] === 'commit' || rest[0] === 'push')) return rest[0] === 'push' ? gatePush(root) : gateCommit(root);
 
   if (command === 'install') {
     const loaded = loadConfig(root);
@@ -123,7 +156,10 @@ export function main(argv: string[]): number {
       return 2;
     }
     const cliPath = realpathSync(fileURLToPath(import.meta.url));
-    const { ok, messages } = installHooks(root, cliPath, [{ name: 'pre-commit', command: 'gate commit' }]);
+    const { ok, messages } = installHooks(root, cliPath, [
+      { name: 'pre-commit', command: 'gate commit' },
+      { name: 'pre-push', command: 'gate push' },
+    ]);
     messages.forEach((m) => console.log(`governor: ${m}`));
     return ok ? 0 : 1;
   }

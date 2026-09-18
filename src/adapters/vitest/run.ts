@@ -3,11 +3,21 @@ import { randomUUID } from 'node:crypto';
 import { ledgerPath, readLedger } from '../../ledger.js';
 import type { RunOutcome } from '../../types.js';
 
+// git exports these into hooks (absolute, and always in linked worktrees). If the
+// user's tests shell out to git they would hit the real repo, so never forward them.
+const GIT_REPO_VARS = ['GIT_DIR', 'GIT_INDEX_FILE', 'GIT_WORK_TREE', 'GIT_COMMON_DIR'];
+
+function childEnv(runId: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env, GOVERNOR_RUN_ID: runId };
+  for (const k of GIT_REPO_VARS) delete env[k];
+  return env;
+}
+
 export function runVitest(root: string, timeoutMs: number, extraArgs: string[] = []): RunOutcome {
   const runId = randomUUID();
   const res = spawnSync('npx', ['--no-install', 'vitest', 'run', '--root', root, ...extraArgs], {
     cwd: root,
-    env: { ...process.env, GOVERNOR_RUN_ID: runId },
+    env: childEnv(runId),
     stdio: 'inherit',
     timeout: timeoutMs,
   });
