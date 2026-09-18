@@ -55,7 +55,8 @@ test/fixtures/no-reporter/ok.test.ts
 ### Task 1: Scaffold, core types, classifier
 
 **Files:**
-- Create: `package.json`, `tsconfig.json`, `vitest.config.ts`, `.gitignore`, `src/types.ts`, `src/classify.ts`
+- Create: `package.json`, `tsconfig.json`, `vitest.config.ts`, `src/types.ts`, `src/classify.ts`
+- Modify: `.gitignore`
 - Test: `test/classify.test.ts`
 
 **Interfaces:**
@@ -128,8 +129,10 @@ export default defineConfig({
 });
 ```
 
-`.gitignore`:
+`.gitignore` (already exists with `.DS_Store` and `.superpowers/`; replace it with):
 ```
+.DS_Store
+.superpowers/
 node_modules/
 dist/
 .governor/ledger.jsonl

@@ -47,8 +47,8 @@ limitations. Don't fix them unless the plan says to, and add any new gap you fin
 
 ## Starting state
 
-- Repo: /Volumes/BigBadDrive_1/tdd-governor. Branch `main`. There is NO git remote. Do
-  not create one or a GitHub repo. That's my call.
+- Repo: /Volumes/BigBadDrive_1/tdd-governor. Remote `origin` =
+  https://github.com/BigBadApps/tdd-governor.git. Run `git switch main && git pull --ff-only` first.
 - Branch off `main` → <BRANCH>. If that name exists, use the next free numeric suffix
   and say so. If the plan's changes already appear on `main`, stop and tell me.
 - Plan checkboxes may already read [x]. Treat work as NOT done. Verify real state with
@@ -70,9 +70,12 @@ limitations. Don't fix them unless the plan says to, and add any new gap you fin
 5. Write the stage findings doc exactly as the plan's final task specifies. Every
    criterion is tagged `test` / `code-reasoned` / `live-observed` / `deferred`. Never write
    Pass for something only code-reasoned. Record real wall-clock numbers where asked.
-6. Finish with superpowers:finishing-a-development-branch, choosing the **local merge**
-   option: `git merge --no-ff <BRANCH>` into `main` (no squash). No push, no PR: there's
-   no remote.
+6. Finish with superpowers:finishing-a-development-branch: push <BRANCH> to `origin`,
+   `gh pr create` against `main` (body: tasks done, gates run with test counts,
+   findings-doc path, client-repo branches left for my review), then merge the PR with
+   a **merge commit** (`gh pr merge --merge`; this repo does not squash). Then
+   `git switch main && git pull --ff-only` locally. This push/PR/merge authorization
+   covers the tdd-governor repo only.
 
 ## Rules that the plans rely on (do not relitigate)
 
@@ -93,6 +96,9 @@ limitations. Don't fix them unless the plan says to, and add any new gap you fin
   bug, stop and tell me with the hook output. Don't bypass it.
   After Stage 2, `dist/` must be rebuilt (`npm run build`) before the hook sees changes
   to the governor's own code.
+- From Stage 3 Task 4 onward, pushing <BRANCH> runs this repo's own pre-push mutation
+  gate on the governor's changed `src/` lines. A surviving mutant there blocks the push:
+  strengthen the tests, don't bypass it.
 - Commits in the governor repo run its full suite, including real Stryker/mutmut tests
   from Stage 3 on. Several minutes per commit is expected. Don't disable tests to speed
   it up.
@@ -119,11 +125,11 @@ Those tasks modify another repo. For each one:
 - Any plan step's Expected result can't be reached without changing a test expectation
   or a spec rule.
 - A client repo's working tree is dirty, or its baseline suite is red.
-- You'd need to create a remote, push, open a PR, or merge outside tdd-governor's local `main`.
+- You'd need to push, open a PR, or merge anywhere other than tdd-governor's `origin`.
 
 ## Reporting
 
-Report: branch name, per-task commit SHAs, local merge SHA, final gate output (test
+Report: branch name, per-task commit SHAs, PR URL + merge commit SHA, final gate output (test
 counts), findings-doc path, client-repo branches + SHAs (if any), wall times measured,
 every deviation from the plan's literal code and why, and any new Known Gap added to
 spec §9.
