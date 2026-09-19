@@ -35,11 +35,11 @@ A file clients copy to `.github/workflows/governor.yml`. It:
 
 1. Triggers on `pull_request`.
 2. Checks out the client repo with `fetch-depth: 0`.
-3. Checks out `BigBadApps/tdd-governor` at a pinned SHA into `.governor-tool/`, authenticating with the secret `GOVERNOR_READ_TOKEN`, and runs `npm ci && npm run build` there.
+3. Clones `BigBadApps/tdd-governor` into `$RUNNER_TEMP/governor`, authenticating with the secret `GOVERNOR_READ_TOKEN`, checks out a pinned SHA, and runs `npm ci && npm run build` there. It lives outside the workspace so the client's test runner cannot discover the governor's own tests.
 4. Installs the client's dependencies (`npm ci`).
-5. Runs `node .governor-tool/dist/cli.js gate ci` with `GOVERNOR_HOME=$PWD/.governor-tool` and Node 22.
+5. Runs `node $GOVERNOR_HOME/dist/cli.js gate ci` with `GOVERNOR_HOME=$RUNNER_TEMP/governor` and Node 22.
 
-Clients add `.governor-tool/` to `.gitignore`. Bumping the pinned SHA is a manual edit.
+Bumping the pinned SHA is a manual edit.
 
 ### 3. Client change: reporter path
 

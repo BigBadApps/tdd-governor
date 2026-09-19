@@ -48,3 +48,12 @@ export function changedLines(diff: FileDiff[], include: (path: string) => boolea
   }
   return map;
 }
+
+export function ciBase(root: string, flag: string | undefined, env: NodeJS.ProcessEnv = process.env): string {
+  const ref = flag ?? (env.GITHUB_BASE_REF ? `origin/${env.GITHUB_BASE_REF}` : 'main');
+  try {
+    return git(root, ['merge-base', 'HEAD', ref]).trim();
+  } catch {
+    throw new Error(`no merge-base between HEAD and '${ref}': fetch full history (fetch-depth: 0) and make sure '${ref}' exists`);
+  }
+}
