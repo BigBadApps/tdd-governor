@@ -90,12 +90,16 @@ export function redBeforeGreen(input: {
       }
       block = true;
       const kinds = [...new Set(fails.map((x) => x.failureKind))].join(', ');
+      const failedToImport = windowed.some((r) => r.collectionErrors.some((e) => e.file === test.file));
+      const stub = 'stub the implementation (exports present, wrong values) so an expect() fails';
       findings.push({
         ...where,
         message:
-          fails.length === 0
-            ? `${test.id}: never seen failing: run it red (failing assertion) before implementing`
-            : `${test.id}: only failed with ${kinds}: not a valid red; stub the implementation so the assertion fails`,
+          fails.length > 0
+            ? `${test.id}: only failed with ${kinds}: a missing export or thrown error is not a valid red; ${stub}`
+            : failedToImport
+              ? `${test.id}: never seen failing (the file failed to import, which is not a valid red): ${stub}`
+              : `${test.id}: never seen failing: run it red (failing assertion) before implementing`,
       });
     }
   }

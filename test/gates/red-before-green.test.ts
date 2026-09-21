@@ -158,6 +158,24 @@ describe('redBeforeGreen', () => {
     expect(r.findings[0]!.message).toMatch(/adds: never seen failing/);
   });
 
+  it('says how to get a valid red when the only failure was a missing export or thrown error', () => {
+    const records = [
+      run('2026-09-18T01:00:00.000Z', [t('adds', 5, 'fail', 'runtime_error')]),
+      run('2026-09-18T02:00:00.000Z', [t('adds', 5, 'pass')]),
+    ];
+    const r = redBeforeGreen({ diff: modifiedAt(5), isTestFile, records, sinceIso: SINCE });
+    expect(r.findings[0]!.message).toMatch(/missing export or thrown error.*stub.*expect\(\)/);
+  });
+
+  it('names an import failure when the file never got past collection', () => {
+    const records = [
+      { ...run('2026-09-18T01:00:00.000Z', []), exitCode: 1, collectionErrors: [{ file: F, message: 'Cannot find module ../src/math' }] },
+      run('2026-09-18T02:00:00.000Z', [t('adds', 5, 'pass')]),
+    ];
+    const r = redBeforeGreen({ diff: modifiedAt(5), isTestFile, records, sinceIso: SINCE });
+    expect(r.findings[0]!.message).toMatch(/failed to import.*not a valid red.*stub/);
+  });
+
   it('does not judge a removal-only edit to a test file (diff audit owns removals)', () => {
     const diff: FileDiff[] = [{ path: F, status: 'modified', added: [], removed: [{ line: 1, text: 'x' }] }];
     expect(redBeforeGreen({ diff, isTestFile, records: [], sinceIso: SINCE }).status).toBe('PASS');

@@ -111,6 +111,15 @@ describe('governor gate commit (e2e)', () => {
     expect(res.stderr + res.stdout).toMatch(/never seen failing/);
   });
 
+  it('points a blocked agent at the primer', () => {
+    const root = makeRepo();
+    write(root, 'src/add.ts', 'export const add = (a: number, b: number) => a + b;\n');
+    write(root, 'tests/add.test.ts', "import { expect, it } from 'vitest';\nimport { add } from '../src/add';\nit('adds', () => {\n  expect(add(2, 3)).toBe(5);\n});\n");
+    const res = commit(root);
+    expect(res.status).not.toBe(0);
+    expect(res.stderr + res.stdout).toMatch(/read \.governor\/PRIMER\.md/);
+  });
+
   it('blocks an added .skip', () => {
     const root = makeRepo();
     write(root, 'tests/a.test.ts', "import { it } from 'vitest';\nit.skip('later', () => {});\n");

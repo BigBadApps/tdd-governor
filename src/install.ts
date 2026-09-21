@@ -1,8 +1,10 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { git } from './git.js';
+import { PRIMER } from './primer.js';
 
 const MARKER = '# tdd-governor';
+export const PRIMER_FILE = '.governor/PRIMER.md';
 
 export function installHooks(
   root: string,
@@ -25,6 +27,11 @@ export function installHooks(
     chmodSync(file, 0o755);
     messages.push(`installed ${name} → governor ${command}`);
   }
+
+  const primer = path.join(root, PRIMER_FILE);
+  mkdirSync(path.dirname(primer), { recursive: true });
+  writeFileSync(primer, PRIMER);
+  messages.push(`wrote ${PRIMER_FILE}: point your agents at it (for example from AGENTS.md or CLAUDE.md)`);
 
   const gitignore = path.join(root, '.gitignore');
   const entry = '.governor/ledger.jsonl';
