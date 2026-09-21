@@ -127,4 +127,23 @@ describe('governor gate commit (e2e)', () => {
     const ledger = execFileSync('cat', [path.join(root, '.governor', 'ledger.jsonl')], { encoding: 'utf8' });
     expect(ledger).toMatch(/"reason":"e2e override"/);
   });
+
+  it('ignores failing tests in a sibling worktree nested under the root', () => {
+    const root = makeRepo();
+    write(root, 'vitest.config.ts', [
+      "import { defineConfig } from 'vitest/config';",
+      `import GovernorReporter from ${JSON.stringify(path.join(governorRoot, 'dist/adapters/vitest/reporter.js'))};`,
+      "export default defineConfig({ test: { includeTaskLocation: true, reporters: ['default', new GovernorReporter()] } });",
+    ].join('\n'));
+    write(root, '.gitignore', 'node_modules\n.worktrees\n');
+    write(root, 'tests/ok.test.ts', "import { expect, it } from 'vitest';\nit('ok', () => {\n  expect(1).toBe(1);\n});\n");
+    execFileSync('git', ['add', '-A'], { cwd: root });
+    execFileSync('git', ['commit', '-q', '--no-verify', '-m', 'scan everything'], { cwd: root });
+    execFileSync('git', ['worktree', 'add', '-q', '.worktrees/sib', '-b', 'sib'], { cwd: root });
+    write(root, '.worktrees/sib/tests/wip.test.ts', "import { expect, it } from 'vitest';\nit('wip', () => {\n  expect(1).toBe(2);\n});\n");
+    write(root, 'docs/notes.md', 'notes\n');
+    const res = commit(root);
+    expect(res.stderr + res.stdout).not.toMatch(/wip/);
+    expect(res.status).toBe(0);
+  });
 });

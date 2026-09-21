@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { nestedWorktrees } from '../../git.js';
 import { ledgerPath, readLedger } from '../../ledger.js';
 import type { RunOutcome } from '../../types.js';
 
@@ -15,7 +16,9 @@ function childEnv(runId: string): NodeJS.ProcessEnv {
 
 export function runVitest(root: string, timeoutMs: number, extraArgs: string[] = []): RunOutcome {
   const runId = randomUUID();
-  const res = spawnSync('npx', ['--no-install', 'vitest', 'run', '--root', root, ...extraArgs], {
+  // A sibling worktree under the root holds another checkout's unfinished tests; they are not this run's to judge.
+  const skipSiblings = nestedWorktrees(root).flatMap((rel) => ['--exclude', `${rel}/**`]);
+  const res = spawnSync('npx', ['--no-install', 'vitest', 'run', '--root', root, ...skipSiblings, ...extraArgs], {
     cwd: root,
     env: childEnv(runId),
     stdio: 'inherit',
