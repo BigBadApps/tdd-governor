@@ -73,6 +73,24 @@ describe('governor outside a git repo', () => {
 });
 
 describe('governor gate commit (e2e)', () => {
+  it('does not blame an existing test for a describe block appended after it (G8)', () => {
+    const root = makeRepo();
+    const imports = "import { describe, expect, it } from 'vitest';\nimport { add } from '../src/add';\n";
+    const adds = "it('adds', () => {\n  expect(add(2, 3)).toBe(5);\n});\n";
+    write(root, 'src/add.ts', 'export const add = (a: number, b: number) => a + b;\n');
+    write(root, 'tests/add.test.ts', imports + adds);
+    execFileSync('git', ['add', '-A'], { cwd: root });
+    execFileSync('git', ['commit', '-q', '--no-verify', '-m', 'existing test'], { cwd: root });
+    write(root, 'src/mul.ts', 'export const mul = (a: number, b: number) => 0;\n');
+    write(root, 'tests/add.test.ts', imports + "import { mul } from '../src/mul';\n" + adds
+      + "\ndescribe('mul', () => {\n  it('multiplies', () => {\n    expect(mul(2, 3)).toBe(6);\n  });\n});\n");
+    expect(runTests(root).status).toBe(1); // red, for an assertion
+    write(root, 'src/mul.ts', 'export const mul = (a: number, b: number) => a * b;\n');
+    const res = commit(root);
+    expect(res.stderr + res.stdout).not.toMatch(/adds: never seen failing/);
+    expect(res.status).toBe(0);
+  });
+
   it('passes a genuine test-first commit', () => {
     const root = makeRepo();
     write(root, 'src/add.ts', 'export const add = (a: number, b: number) => 0;\n');

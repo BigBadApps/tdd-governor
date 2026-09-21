@@ -17,6 +17,48 @@ const modifiedAt = (...lines: number[]): FileDiff[] => [
   { path: F, status: 'modified', added: lines.map((line) => ({ line, text: 'x' })), removed: [] },
 ];
 
+// G8: which test owns an added line. Layout below is the file as staged; `adds` spans lines 4-6.
+const SOURCE = [
+  "import { describe, it } from 'vitest';", //  1
+  '', //                                        2
+  "describe('math', () => {", //                3
+  "  it('adds', () => {", //                    4
+  '    expect(1 + 1).toBe(2);', //              5
+  '  });', //                                   6
+  '});', //                                     7
+  '', //                                        8
+  "describe('fresh', () => {", //               9
+  "  it('multiplies', () => {", //             10
+  '    expect(2 * 2).toBe(4);', //             11
+  '  });', //                                  12
+  '});', //                                    13
+].join('\n');
+const source = (p: string) => (p === F ? SOURCE : undefined);
+const g8Records = [
+  run('2026-09-18T02:00:00.000Z', [t('adds', 4, 'pass'), t('multiplies', 10, 'fail', 'assertion')]),
+];
+
+describe('redBeforeGreen test spans (G8)', () => {
+  it('does not blame the last existing test for a describe block appended after it', () => {
+    const r = redBeforeGreen({ diff: modifiedAt(8, 9, 10, 11, 12, 13), isTestFile, records: g8Records, sinceIso: SINCE, source });
+    expect(r).toEqual({ gate: 'red-before-green', status: 'PASS', findings: [] });
+  });
+
+  it('blames only the test whose span holds an added line, its closing line included', () => {
+    const records = [run('2026-09-18T02:00:00.000Z', [t('adds', 4, 'pass'), t('multiplies', 10, 'pass')])];
+    const r = redBeforeGreen({ diff: modifiedAt(8, 9, 12), isTestFile, records, sinceIso: SINCE, source });
+    expect(r.status).toBe('BLOCK');
+    expect(r.findings).toEqual([{ file: F, line: 10, message: expect.stringMatching(/multiplies: never seen failing/) }]);
+  });
+
+  it('ends a one-line test on its own line', () => {
+    const one = ["it('a', () => {});", '', "it('b', () => {});"].join('\n');
+    const records = [run('2026-09-18T02:00:00.000Z', [t('a', 1, 'pass'), t('b', 3, 'fail', 'assertion')])];
+    const r = redBeforeGreen({ diff: modifiedAt(2, 3), isTestFile, records, sinceIso: SINCE, source: () => one });
+    expect(r.status).toBe('PASS');
+  });
+});
+
 describe('redBeforeGreen', () => {
   it('passes when the changed test failed with an assertion in the window', () => {
     const records = [
