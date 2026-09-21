@@ -1,4 +1,6 @@
 import { execFileSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import path from 'node:path';
 import { parseUnifiedDiff, type FileDiff } from './diff.js';
 
 export function git(root: string, args: string[]): string {
@@ -20,6 +22,23 @@ export function stagedFile(root: string, file: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+// Linked worktrees checked out inside `root`, as root-relative posix paths.
+export function nestedWorktrees(root: string): string[] {
+  const real = realpathSync(root);
+  let out: string;
+  try {
+    out = git(root, ['worktree', 'list', '--porcelain']);
+  } catch {
+    return []; // not a repo (e.g. a Stryker sandbox copy): nothing nested to skip
+  }
+  return out
+    .split('\n')
+    .filter((l) => l.startsWith('worktree '))
+    .map((l) => path.relative(real, l.slice('worktree '.length)))
+    .filter((rel) => rel !== '' && !rel.startsWith('..') && !path.isAbsolute(rel))
+    .map((rel) => rel.split(path.sep).join('/'));
 }
 
 export function evidenceSince(root: string, base = 'main'): string {

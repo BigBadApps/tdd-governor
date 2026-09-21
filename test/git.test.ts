@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { FileDiff } from '../src/diff.js';
-import { changedLines, ciBase, pushBase, pushDiff } from '../src/git.js';
+import { changedLines, ciBase, nestedWorktrees, pushBase, pushDiff } from '../src/git.js';
 
 describe('ciBase', () => {
   function repo() {
@@ -76,5 +76,23 @@ describe('pushBase / pushDiff', () => {
     g('commit', '-qam', 'change');
     expect(pushBase(root)).toBe(base);
     expect(pushDiff(root, base)[0]!.added).toEqual([{ line: 2, text: 'two' }]);
+  });
+});
+
+describe('nestedWorktrees', () => {
+  it('lists linked worktrees inside the root, not ones outside it', () => {
+    const parent = mkdtempSync(path.join(tmpdir(), 'gov-wt-'));
+    const root = path.join(parent, 'main');
+    mkdirSync(root);
+    const g = (...a: string[]) => execFileSync('git', a, { cwd: root, encoding: 'utf8' }).trim();
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 't@example.com');
+    g('config', 'user.name', 't');
+    writeFileSync(path.join(root, 'a.ts'), 'one\n');
+    g('add', '.');
+    g('commit', '-q', '-m', 'base');
+    g('worktree', 'add', '-q', '.worktrees/sib', '-b', 'sib');
+    g('worktree', 'add', '-q', path.join(parent, 'outside'), '-b', 'out');
+    expect(nestedWorktrees(root)).toEqual(['.worktrees/sib']);
   });
 });
