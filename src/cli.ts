@@ -10,7 +10,7 @@ import { diffAudit } from './gates/diff-audit.js';
 import { green } from './gates/green.js';
 import { mutation } from './gates/mutation.js';
 import { redBeforeGreen } from './gates/red-before-green.js';
-import { changedLines, ciBase, evidenceSince, pushBase, pushDiff, repoRoot, stagedDiff } from './git.js';
+import { changedLines, ciBase, evidenceSince, pushBase, pushDiff, repoRoot, stagedDiff, stagedFile } from './git.js';
 import { installHooks } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
 import { runStryker } from './mutation/stryker.js';
@@ -79,7 +79,7 @@ function gateCommit(root: string): number {
   if (corrupt > 0) console.log(`governor: skipped ${corrupt} corrupt ledger line(s)`);
   const results = [
     greenResult,
-    redBeforeGreen({ diff, isTestFile, records, sinceIso }),
+    redBeforeGreen({ diff, isTestFile, records, sinceIso, source: (p) => stagedFile(root, p) }),
     diffAudit({ diff, isTestFile }),
   ];
   return finish(root, config, results, process.env.GOVERNOR_OVERRIDE);

@@ -13,6 +13,15 @@ export function stagedDiff(root: string): FileDiff[] {
   return parseUnifiedDiff(git(root, ['diff', '--cached', '-U0', '--no-color', '--no-renames', '--no-ext-diff']));
 }
 
+// Index content of `file` (what the staged diff's added-line numbers refer to); undefined if not staged.
+export function stagedFile(root: string, file: string): string | undefined {
+  try {
+    return git(root, ['show', `:${file}`]);
+  } catch {
+    return undefined;
+  }
+}
+
 export function evidenceSince(root: string, base = 'main'): string {
   try {
     git(root, ['rev-parse', '--verify', '--quiet', 'HEAD']);
