@@ -77,6 +77,56 @@ describe('pushBase / pushDiff', () => {
     expect(pushBase(root)).toBe(base);
     expect(pushDiff(root, base)[0]!.added).toEqual([{ line: 2, text: 'two' }]);
   });
+
+  // feature pushed once (upstream set), then main gains a commit touching b.ts.
+  const pushedFeature = () => {
+    const parent = mkdtempSync(path.join(tmpdir(), 'gov-push-'));
+    const remote = path.join(parent, 'remote.git');
+    const root = path.join(parent, 'work');
+    execFileSync('git', ['init', '-q', '--bare', '-b', 'main', remote]);
+    mkdirSync(root);
+    const g = (...a: string[]) => execFileSync('git', a, { cwd: root, encoding: 'utf8' }).trim();
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 't@example.com');
+    g('config', 'user.name', 't');
+    g('remote', 'add', 'origin', remote);
+    writeFileSync(path.join(root, 'a.ts'), 'one\n');
+    writeFileSync(path.join(root, 'b.ts'), 'main\n');
+    g('add', '.');
+    g('commit', '-q', '-m', 'base');
+    g('push', '-q', 'origin', 'main');
+    g('checkout', '-q', '-b', 'feature');
+    writeFileSync(path.join(root, 'a.ts'), 'one\ntwo\n');
+    g('commit', '-qam', 'feature change');
+    g('push', '-q', '-u', 'origin', 'feature');
+    const upstream = g('rev-parse', 'HEAD');
+    g('checkout', '-q', 'main');
+    writeFileSync(path.join(root, 'b.ts'), 'main\nreviewed on main\n');
+    g('commit', '-qam', 'main change');
+    g('push', '-q', 'origin', 'main');
+    g('checkout', '-q', 'feature');
+    return { root, g, upstream };
+  };
+
+  it('keeps the upstream base when main has not been merged in since the last push', () => {
+    const { root, g, upstream } = pushedFeature();
+    writeFileSync(path.join(root, 'a.ts'), 'one\ntwo\nthree\n');
+    g('commit', '-qam', 'more feature');
+    expect(pushBase(root)).toBe(upstream);
+  });
+
+  it("excludes main's changes after main is merged into a pushed branch", () => {
+    const { root, g } = pushedFeature();
+    g('merge', '-q', '--no-edit', 'main');
+    expect(pushDiff(root, pushBase(root)).map((f) => f.path)).toEqual(['a.ts']);
+  });
+
+  it("excludes origin/main's changes when local main is stale", () => {
+    const { root, g } = pushedFeature();
+    g('branch', '-f', 'main', 'main~1'); // local main behind origin/main
+    g('merge', '-q', '--no-edit', 'origin/main');
+    expect(pushDiff(root, pushBase(root)).map((f) => f.path)).toEqual(['a.ts']);
+  });
 });
 
 describe('nestedWorktrees', () => {

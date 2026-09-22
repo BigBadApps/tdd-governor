@@ -56,12 +56,43 @@ export function evidenceSince(root: string, base = 'main'): string {
   return new Date(git(root, ['show', '-s', '--format=%cI', mergeBase]).trim()).toISOString();
 }
 
-export function pushBase(root: string, base = 'main'): string {
+const isAncestor = (root: string, a: string, b: string): boolean => {
   try {
-    return git(root, ['rev-parse', '--verify', '--quiet', '@{upstream}']).trim();
+    git(root, ['merge-base', '--is-ancestor', a, b]);
+    return true;
   } catch {
-    return git(root, ['merge-base', 'HEAD', base]).trim();
+    return false;
   }
+};
+
+// Newest merge-base of HEAD with `base` or `origin/<base>`, so a stale local main does not widen the diff.
+function baseMergeBase(root: string, base: string): string {
+  const bases = [base, `origin/${base}`].flatMap((ref) => {
+    try {
+      return [git(root, ['merge-base', 'HEAD', ref]).trim()];
+    } catch {
+      return [];
+    }
+  });
+  if (bases.length === 0) return git(root, ['merge-base', 'HEAD', base]).trim(); // throws the usual error
+  // A merge-base equal to HEAD means HEAD is the base branch itself (pushing main): it says nothing.
+  const head = git(root, ['rev-parse', 'HEAD']).trim();
+  const useful = bases.filter((b) => b !== head);
+  if (useful.length === 0) return head;
+  return useful.reduce((a, b) => (isAncestor(root, a, b) ? b : a));
+}
+
+// What this push adds: since the last push, unless main was merged in since then, in which case
+// upstream..HEAD would carry main's already-reviewed commits, so diff against main instead.
+export function pushBase(root: string, base = 'main'): string {
+  const mergeBase = baseMergeBase(root, base);
+  let upstream: string;
+  try {
+    upstream = git(root, ['rev-parse', '--verify', '--quiet', '@{upstream}']).trim();
+  } catch {
+    return mergeBase;
+  }
+  return isAncestor(root, mergeBase, upstream) ? upstream : mergeBase;
 }
 
 export function pushDiff(root: string, baseSha: string): FileDiff[] {
