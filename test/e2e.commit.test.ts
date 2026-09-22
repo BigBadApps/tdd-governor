@@ -195,7 +195,7 @@ describe('clean merges (pre-merge-commit)', () => {
     expect(existsSync(hookPath)).toBe(true);
     const content = existsSync(hookPath) ? readFileSync(hookPath, 'utf8') : '';
     expect(content).toContain('# tdd-governor');
-    expect(content).toContain('gate commit');
+    expect(content).toContain('gate commit --merge');
   });
 
   it("gates a clean merge and passes work TDD'd on the other branch", () => {

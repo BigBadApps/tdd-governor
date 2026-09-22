@@ -116,7 +116,9 @@ export function ciBase(root: string, flag: string | undefined, env: NodeJS.Proce
 }
 
 // Merge heads when a merge is in progress; empty otherwise. Resolves --git-path relative to root for linked worktrees.
-export function mergeHeads(root: string, env: NodeJS.ProcessEnv = process.env): string[] {
+// pre-merge-commit runs before git writes MERGE_HEAD, so that hook passes env to read git's GITHEAD_<sha> vars;
+// other callers omit it so heads inherited from an outer merge never leak in.
+export function mergeHeads(root: string, env: NodeJS.ProcessEnv = {}): string[] {
   const fromEnv = Object.keys(env)
     .filter((k) => /^GITHEAD_[0-9a-f]{40,64}$/i.test(k))
     .map((k) => k.slice('GITHEAD_'.length).toLowerCase());
@@ -131,8 +133,8 @@ export function mergeHeads(root: string, env: NodeJS.ProcessEnv = process.env): 
 }
 
 // Diff for commit gating: staged changes vs HEAD, intersected across all merge heads when merging.
-export function commitDiff(root: string): FileDiff[] {
-  const heads = mergeHeads(root);
+export function commitDiff(root: string, env?: NodeJS.ProcessEnv): FileDiff[] {
+  const heads = mergeHeads(root, env);
   if (heads.length === 0) return stagedDiff(root);
   return mergeScoped(
     stagedDiff(root),
