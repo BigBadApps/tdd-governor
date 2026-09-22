@@ -75,11 +75,7 @@ function baseMergeBase(root: string, base: string): string {
     }
   });
   if (bases.length === 0) return git(root, ['merge-base', 'HEAD', base]).trim(); // throws the usual error
-  // A merge-base equal to HEAD means HEAD is the base branch itself (pushing main): it says nothing.
-  const head = git(root, ['rev-parse', 'HEAD']).trim();
-  const useful = bases.filter((b) => b !== head);
-  if (useful.length === 0) return head;
-  return useful.reduce((a, b) => (isAncestor(root, a, b) ? b : a));
+  return bases.reduce((a, b) => (isAncestor(root, a, b) ? b : a));
 }
 
 // What this push adds: since the last push, unless main was merged in since then, in which case
@@ -92,7 +88,9 @@ export function pushBase(root: string, base = 'main'): string {
   } catch {
     return mergeBase;
   }
-  return isAncestor(root, mergeBase, upstream) ? upstream : mergeBase;
+  // mergeBase === HEAD: HEAD is the base branch itself (pushing main), so main says nothing; use upstream.
+  const head = git(root, ['rev-parse', 'HEAD']).trim();
+  return mergeBase === head || isAncestor(root, mergeBase, upstream) ? upstream : mergeBase;
 }
 
 export function pushDiff(root: string, baseSha: string): FileDiff[] {
