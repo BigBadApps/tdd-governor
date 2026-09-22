@@ -155,4 +155,34 @@ describe('governor gate commit (e2e)', () => {
     expect(res.stderr + res.stdout).not.toMatch(/wip/);
     expect(res.status).toBe(0);
   });
+
+  it('gates a merge only on what the merge adds', () => {
+    const root = makeRepo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+    g('checkout', '-q', '-b', 'feature');
+    write(root, 'src/m.ts', 'export const m = 1;\n');
+    write(root, 'tests/m.test.ts', "import { expect, it } from 'vitest';\nimport { m } from '../src/m';\nit('m1', () => {\n  expect(m).toBe(1);\n});\n");
+    g('add', '-A');
+    g('commit', '-q', '--no-verify', '-m', 'feature work');
+
+    g('checkout', '-q', 'main');
+    write(root, 'src/unrelated.ts', 'export const u = 0;\n');
+    g('add', '-A');
+    g('commit', '-q', '--no-verify', '-m', 'unrelated main work');
+
+    g('merge', '--no-commit', '--no-ff', 'feature');
+    write(root, 'tests/m.test.ts', "import { expect, it } from 'vitest';\nimport { m } from '../src/m';\nit('m1', () => {\n  expect(m).toBe(1);\n});\nit('m2', () => {\n  expect(m).toBe(1);\n});\n");
+    g('add', '-A');
+    runTests(root);
+
+    const failRes = spawnSync('git', ['commit', '-q', '--no-edit'], { cwd: root, encoding: 'utf8' });
+    expect(failRes.status).toBe(1);
+    expect(failRes.stderr + failRes.stdout).toMatch(/m2/);
+
+    g('checkout', 'MERGE_HEAD', '--', 'tests/m.test.ts');
+    runTests(root);
+    const passRes = spawnSync('git', ['commit', '-q', '--no-edit'], { cwd: root, encoding: 'utf8' });
+    expect(passRes.status).toBe(0);
+    expect(passRes.stderr + passRes.stdout).toMatch(/\[PASS\] red-before-green/);
+  });
 });

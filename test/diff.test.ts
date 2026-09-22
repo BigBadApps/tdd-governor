@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseUnifiedDiff } from '../src/diff.js';
+import { mergeScoped, parseUnifiedDiff, type FileDiff } from '../src/diff.js';
 
 const modified = `diff --git a/src/a.ts b/src/a.ts
 index 111..222 100644
@@ -100,5 +100,95 @@ describe('parseUnifiedDiff paths', () => {
 
   it('throws on a header it cannot parse instead of emitting a wrong path', () => {
     expect(() => parseUnifiedDiff('diff --git a/x b/y\n')).toThrow(/unparseable diff header/);
+  });
+});
+
+describe('mergeScoped', () => {
+  it('drops a file that only the other parent changed (absent from theirs)', () => {
+    const ours: FileDiff[] = [{ path: 'a.ts', status: 'modified', added: [{ line: 1, text: 'x' }], removed: [] }];
+    const theirs: FileDiff[][] = [[]];
+    expect(mergeScoped(ours, theirs)).toEqual([]);
+  });
+
+  it('keeps an added line that is new against both parents; drops one that only ours sees', () => {
+    const ours: FileDiff[] = [{
+      path: 'a.ts',
+      status: 'modified',
+      added: [{ line: 1, text: 'both' }, { line: 2, text: 'ours only' }],
+      removed: [],
+    }];
+    const theirs: FileDiff[][] = [[{
+      path: 'a.ts',
+      status: 'modified',
+      added: [{ line: 1, text: 'both' }],
+      removed: [],
+    }]];
+    expect(mergeScoped(ours, theirs)).toEqual([{
+      path: 'a.ts',
+      status: 'modified',
+      added: [{ line: 1, text: 'both' }],
+      removed: [],
+    }]);
+  });
+
+  it('treats a file the other branch created as not added', () => {
+    const ours: FileDiff[] = [{ path: 'new.ts', status: 'added', added: [{ line: 1, text: 'x' }], removed: [] }];
+    const theirs: FileDiff[][] = [[]];
+    expect(mergeScoped(ours, theirs)).toEqual([]);
+  });
+
+  it('drops a removed line the other parent already removed; keeps one removed against both', () => {
+    const ours: FileDiff[] = [{
+      path: 'a.ts',
+      status: 'modified',
+      added: [],
+      removed: [{ line: 1, text: 'already removed' }, { line: 2, text: 'removed both' }],
+    }];
+    const theirs: FileDiff[][] = [[{
+      path: 'a.ts',
+      status: 'modified',
+      added: [],
+      removed: [{ line: 10, text: 'removed both' }],
+    }]];
+    expect(mergeScoped(ours, theirs)).toEqual([{
+      path: 'a.ts',
+      status: 'modified',
+      added: [],
+      removed: [{ line: 2, text: 'removed both' }],
+    }]);
+  });
+
+  it('octopus: with two theirs diffs, a line must be added in both to be kept', () => {
+    const ours: FileDiff[] = [{
+      path: 'a.ts',
+      status: 'modified',
+      added: [{ line: 1, text: 'all' }, { line: 2, text: 'two only' }],
+      removed: [],
+    }];
+    const theirs: FileDiff[][] = [
+      [{ path: 'a.ts', status: 'modified', added: [{ line: 1, text: 'all' }, { line: 2, text: 'two only' }], removed: [] }],
+      [{ path: 'a.ts', status: 'modified', added: [{ line: 1, text: 'all' }], removed: [] }],
+    ];
+    expect(mergeScoped(ours, theirs)).toEqual([{
+      path: 'a.ts',
+      status: 'modified',
+      added: [{ line: 1, text: 'all' }],
+      removed: [],
+    }]);
+  });
+
+  it('status is deleted only when deleted against every parent', () => {
+    const oursDeleted: FileDiff[] = [{ path: 'a.ts', status: 'deleted', added: [], removed: [{ line: 1, text: 'x' }] }];
+    const theirsModified: FileDiff[][] = [[{ path: 'a.ts', status: 'modified', added: [], removed: [{ line: 1, text: 'x' }] }]];
+    expect(mergeScoped(oursDeleted, theirsModified)[0]?.status).toBe('modified');
+
+    const theirsDeleted: FileDiff[][] = [[{ path: 'a.ts', status: 'deleted', added: [], removed: [{ line: 1, text: 'x' }] }]];
+    expect(mergeScoped(oursDeleted, theirsDeleted)[0]?.status).toBe('deleted');
+  });
+  it('matches repeated removed lines by count, not just by text', () => {
+    const line = 'expect(x).toBe(1);';
+    const ours: FileDiff[] = [{ path: 'a.test.ts', status: 'modified', added: [], removed: [{ line: 3, text: line }, { line: 4, text: line }] }];
+    const theirs: FileDiff[][] = [[{ path: 'a.test.ts', status: 'modified', added: [], removed: [{ line: 3, text: line }] }]];
+    expect(mergeScoped(ours, theirs)[0]!.removed).toEqual([{ line: 3, text: line }]);
   });
 });

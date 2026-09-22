@@ -23,6 +23,7 @@ describe('installHooks agent primer', () => {
     expect(text).toMatch(/stub/i);
     expect(text).toMatch(/GOVERNOR_OVERRIDE/);
     expect(text).toMatch(/test\.reporters|vitest\.config/);
+    expect(text).toMatch(/merge commit is gated only on what the merge itself changes/);
     expect(messages.join('\n')).toMatch(/PRIMER\.md/);
   });
 
