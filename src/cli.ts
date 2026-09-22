@@ -60,7 +60,7 @@ function finish(root: string, config: GovernorConfig, results: GateResult[], ove
   }
 }
 
-function gateCommit(root: string): number {
+function gateCommit(root: string, env?: NodeJS.ProcessEnv): number {
   const loaded = loadConfig(root);
   if (!loaded.ok) {
     console.log(formatResults([{ gate: 'green', status: 'GATE_UNAVAILABLE', findings: [{ file: '.governor/config.json', message: loaded.error }] }]));
@@ -68,7 +68,7 @@ function gateCommit(root: string): number {
   }
   const { config } = loaded;
   const isTestFile = picomatch(config.testGlobs);
-  const diff = commitDiff(root);
+  const diff = commitDiff(root, env);
   let sinceIso: string;
   try {
     sinceIso = evidenceSince(root);
@@ -191,7 +191,7 @@ export function main(argv: string[]): number {
     return gateCi(root, i === -1 ? undefined : rest[i + 1]);
   }
 
-  if (command === 'gate' && (rest[0] === 'commit' || rest[0] === 'push')) return rest[0] === 'push' ? gatePush(root) : gateCommit(root);
+  if (command === 'gate' && (rest[0] === 'commit' || rest[0] === 'push')) return rest[0] === 'push' ? gatePush(root) : gateCommit(root, rest.includes('--merge') ? process.env : undefined);
 
   if (command === 'install') {
     const loaded = loadConfig(root);
@@ -202,6 +202,7 @@ export function main(argv: string[]): number {
     const cliPath = realpathSync(fileURLToPath(import.meta.url));
     const { ok, messages } = installHooks(root, cliPath, [
       { name: 'pre-commit', command: 'gate commit' },
+      { name: 'pre-merge-commit', command: 'gate commit --merge' },
       { name: 'pre-push', command: 'gate push' },
     ]);
     messages.forEach((m) => console.log(`governor: ${m}`));

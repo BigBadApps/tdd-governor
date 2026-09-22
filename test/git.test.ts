@@ -222,4 +222,18 @@ describe('commitDiff / mergeHeads', () => {
     gWt('merge', '--no-commit', '--no-ff', 'feature');
     expect(mergeHeads(wt)).toEqual([featureSha]);
   });
+
+  it('GITHEAD_<sha> env heads count only when the caller passes the env (pre-merge-commit hook)', () => {
+    const { root, featureSha } = mergeRepo();
+    const env = { [`GITHEAD_${featureSha}`]: 'feature' };
+    const saved = process.env[`GITHEAD_${featureSha}`];
+    process.env[`GITHEAD_${featureSha}`] = 'feature';
+    try {
+      expect(mergeHeads(root)).toEqual([]);
+    } finally {
+      if (saved === undefined) delete process.env[`GITHEAD_${featureSha}`];
+      else process.env[`GITHEAD_${featureSha}`] = saved;
+    }
+    expect(mergeHeads(root, env)).toEqual([featureSha]);
+  });
 });
