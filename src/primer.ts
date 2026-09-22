@@ -39,6 +39,7 @@ wastes a cycle.
 - Editing a test also puts it in scope: it needs a red in the same evidence window.
 - Evidence counts from the merge-base with \`main\` to now, per worktree (each worktree has its own ledger).
 - A \`.skip\`, \`.only\` or \`.todo\` is blocked outright, and deleting assertions is blocked unless you add as many.
+- A merge commit is gated only on what the merge itself changes (conflict resolution); tests the merged branch brought in were gated on that branch.
 
 ## Never bypass
 
