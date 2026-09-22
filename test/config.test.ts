@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -41,6 +41,40 @@ describe('loadConfig', () => {
     const result = loadConfig(repoWith(JSON.stringify({ ...valid, testGlobs: [] })));
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/testGlobs/);
+  });
+
+  it('accepts a packageRoot folder inside the repo', () => {
+    const root = repoWith(JSON.stringify({ ...valid, packageRoot: 'frontend' }));
+    mkdirSync(path.join(root, 'frontend'));
+    expect(loadConfig(root)).toEqual({ ok: true, config: { ...valid, packageRoot: 'frontend' } });
+  });
+
+  it('accepts a folder whose name merely starts with ..', () => {
+    const root = repoWith(JSON.stringify({ ...valid, packageRoot: '..frontend' }));
+    mkdirSync(path.join(root, '..frontend'));
+    expect(loadConfig(root)).toEqual({ ok: true, config: { ...valid, packageRoot: '..frontend' } });
+  });
+
+  it('rejects a packageRoot folder that does not exist', () => {
+    const result = loadConfig(repoWith(JSON.stringify({ ...valid, packageRoot: 'frontend' })));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/packageRoot/);
+  });
+
+  it('rejects a packageRoot symlink that leads outside the repo', () => {
+    const root = repoWith(JSON.stringify({ ...valid, packageRoot: 'link' }));
+    symlinkSync(mkdtempSync(path.join(tmpdir(), 'gov-outside-')), path.join(root, 'link'));
+    const result = loadConfig(root);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/packageRoot/);
+  });
+
+  it('rejects a packageRoot outside the repo', () => {
+    for (const packageRoot of ['../elsewhere', '/abs/path', 'a/../../b']) {
+      const result = loadConfig(repoWith(JSON.stringify({ ...valid, packageRoot })));
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toMatch(/packageRoot/);
+    }
   });
 
   it('fails on an unknown adapter', () => {
