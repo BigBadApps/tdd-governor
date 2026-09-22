@@ -12,6 +12,25 @@ const repo = () => {
 };
 const hooks = [{ name: 'pre-commit', command: 'gate commit' }];
 
+describe('installHooks writes portable hooks', () => {
+  it('keeps the machine-specific cli path out of the hook file', () => {
+    const root = repo();
+    installHooks(root, '/x/cli.js', hooks);
+    const hook = readFileSync(path.join(root, '.git', 'hooks', 'pre-commit'), 'utf8');
+    expect(hook).not.toContain('/x/cli.js');
+    expect(hook).toContain('# tdd-governor');
+    expect(hook).toContain('gate commit');
+  });
+
+  it('records the cli path in .governor/cli-path and ignores it', () => {
+    const root = repo();
+    const { messages } = installHooks(root, '/x/cli.js', hooks);
+    expect(readFileSync(path.join(root, '.governor', 'cli-path'), 'utf8').trim()).toBe('/x/cli.js');
+    expect(readFileSync(path.join(root, '.gitignore'), 'utf8').split('\n')).toContain('.governor/cli-path');
+    expect(messages.join('\n')).toMatch(/cli-path/);
+  });
+});
+
 describe('installHooks agent primer', () => {
   it('writes .governor/PRIMER.md saying what counts as a red and how to get one', () => {
     const root = repo();
