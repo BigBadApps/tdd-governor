@@ -22,3 +22,23 @@ describe('governor-ci.yml template', () => {
     expect(template.match(/checkout --quiet GOVERNOR_SHA/g)).toHaveLength(1);
   });
 });
+
+describe("the governor's own CI workflow", () => {
+  const workflow = readFileSync(path.resolve(__dirname, '../.github/workflows/ci.yml'), 'utf8');
+
+  it.each([
+    'pull_request',
+    'fetch-depth: 0', // gate ci needs a merge-base with the PR's base
+    'node-version: 22',
+    'npm test',
+    'gate ci',
+    'contents: read',
+  ])('contains %s', (needle) => {
+    expect(workflow).toContain(needle);
+  });
+
+  it('gates itself with the build under test, not a downloaded governor', () => {
+    expect(workflow).toContain('node dist/cli.js gate ci');
+    expect(workflow).not.toContain('GOVERNOR_READ_TOKEN');
+  });
+});
