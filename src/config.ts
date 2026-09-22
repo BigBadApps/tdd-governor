@@ -2,6 +2,9 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 
+// A leading '..' segment, not merely a '..' prefix: a folder may legitimately be named '..frontend'.
+const escapes = (rel: string, sep = path.sep) => rel === '..' || rel.startsWith(`..${sep}`);
+
 // No defaults for globs: wrong globs silently check nothing (spec §5).
 export const ConfigSchema = z
   .object({
@@ -11,7 +14,7 @@ export const ConfigSchema = z
       .string()
       .min(1)
       .refine((p) => !p.includes('\\'), "use '/' as the separator, like the globs")
-      .refine((p) => !path.isAbsolute(p) && !path.posix.normalize(p).startsWith('..'), 'must be a folder inside the repo')
+      .refine((p) => !path.isAbsolute(p) && !escapes(path.posix.normalize(p), '/'), 'must be a folder inside the repo')
       .optional(),
     testGlobs: z.array(z.string().min(1)).min(1),
     sourceGlobs: z.array(z.string().min(1)).min(1),
@@ -55,7 +58,7 @@ export function loadConfig(root: string): { ok: true; config: GovernorConfig } |
     } catch {
       return { ok: false, error: `.governor/config.json invalid: packageRoot: folder '${parsed.data.packageRoot}' not found` };
     }
-    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    if (escapes(rel) || path.isAbsolute(rel)) {
       return { ok: false, error: `.governor/config.json invalid: packageRoot: must be a folder inside the repo` };
     }
   }

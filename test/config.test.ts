@@ -49,6 +49,12 @@ describe('loadConfig', () => {
     expect(loadConfig(root)).toEqual({ ok: true, config: { ...valid, packageRoot: 'frontend' } });
   });
 
+  it('accepts a folder whose name merely starts with ..', () => {
+    const root = repoWith(JSON.stringify({ ...valid, packageRoot: '..frontend' }));
+    mkdirSync(path.join(root, '..frontend'));
+    expect(loadConfig(root)).toEqual({ ok: true, config: { ...valid, packageRoot: '..frontend' } });
+  });
+
   it('rejects a packageRoot folder that does not exist', () => {
     const result = loadConfig(repoWith(JSON.stringify({ ...valid, packageRoot: 'frontend' })));
     expect(result.ok).toBe(false);
