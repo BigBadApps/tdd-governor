@@ -22,11 +22,11 @@ describe('installHooks writes portable hooks', () => {
     expect(hook).toContain('gate commit');
   });
 
-  it('records the cli path in .governor/cli-path and ignores it', () => {
+  it('records the cli path in the shared git directory, where every worktree sees it', () => {
     const root = repo();
     const { messages } = installHooks(root, '/x/cli.js', hooks);
-    expect(readFileSync(path.join(root, '.governor', 'cli-path'), 'utf8').trim()).toBe('/x/cli.js');
-    expect(readFileSync(path.join(root, '.gitignore'), 'utf8').split('\n')).toContain('.governor/cli-path');
+    expect(readFileSync(path.join(root, '.git', 'tdd-governor-cli-path'), 'utf8').trim()).toBe('/x/cli.js');
+    expect(existsSync(path.join(root, '.governor', 'cli-path'))).toBe(false);
     expect(messages.join('\n')).toMatch(/cli-path/);
   });
 });

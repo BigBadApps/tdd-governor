@@ -5,15 +5,14 @@ import { PRIMER } from './primer.js';
 
 const MARKER = '# tdd-governor';
 export const PRIMER_FILE = '.governor/PRIMER.md';
-export const CLI_PATH_FILE = '.governor/cli-path';
+// One pointer per repository, in the shared git directory: every worktree reads it, and git never tracks it.
+export const CLI_PATH_FILE = 'tdd-governor-cli-path';
 
 // The hook file may be tracked (core.hooksPath), so it must hold no machine-specific path: it reads one
 // written by install. A clone without the governor gets a notice, not a block — CI still runs `gate ci`.
 const hookScript = (command: string) => `#!/bin/sh
 ${MARKER}
-cli="\${GOVERNOR_CLI:-$(cat "$(git rev-parse --show-toplevel)/${CLI_PATH_FILE}" 2>/dev/null)}"
-# A linked worktree has no pointer of its own: fall back to the main working tree's.
-[ -f "$cli" ] || cli=$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/../${CLI_PATH_FILE}" 2>/dev/null)
+cli="\${GOVERNOR_CLI:-$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/${CLI_PATH_FILE}" 2>/dev/null)}"
 if [ ! -f "$cli" ]; then
   echo "governor: not installed on this machine, skipping ${command} (run: governor install)" >&2
   exit 0
@@ -44,10 +43,9 @@ export function installHooks(
     messages.push(`installed ${name} → governor ${command}`);
   }
 
-  const pointer = path.join(root, CLI_PATH_FILE);
-  mkdirSync(path.dirname(pointer), { recursive: true });
+  const pointer = path.resolve(root, git(root, ['rev-parse', '--git-common-dir']).trim(), CLI_PATH_FILE);
   writeFileSync(pointer, `${cliPath}\n`);
-  messages.push(`wrote ${CLI_PATH_FILE}: this machine's governor, kept out of the tracked hook`);
+  messages.push(`wrote ${CLI_PATH_FILE} in the git directory: this machine's governor, shared by every worktree and kept out of the tracked hook`);
 
   const primer = path.join(root, PRIMER_FILE);
   mkdirSync(path.dirname(primer), { recursive: true });
@@ -55,7 +53,7 @@ export function installHooks(
   messages.push(`wrote ${PRIMER_FILE}: point your agents at it (for example from AGENTS.md or CLAUDE.md)`);
 
   const gitignore = path.join(root, '.gitignore');
-  const entries = [CLI_PATH_FILE, '.governor/ledger.jsonl', ...(packageRel === '.' ? [] : [`${packageRel}/.governor/ledger.jsonl`])];
+  const entries = ['.governor/ledger.jsonl', ...(packageRel === '.' ? [] : [`${packageRel}/.governor/ledger.jsonl`])];
   for (const entry of entries) {
     const current = existsSync(gitignore) ? readFileSync(gitignore, 'utf8') : '';
     if (current.split('\n').includes(entry)) continue;
