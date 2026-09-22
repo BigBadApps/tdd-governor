@@ -11,7 +11,7 @@ import { diffAudit } from './gates/diff-audit.js';
 import { green } from './gates/green.js';
 import { mutation } from './gates/mutation.js';
 import { redBeforeGreen } from './gates/red-before-green.js';
-import { changedLines, ciBase, evidenceSince, pushBase, pushDiff, repoRoot, stagedDiff, stagedFile } from './git.js';
+import { changedLines, ciBase, commitDiff, evidenceSince, pushBase, pushDiff, repoRoot, stagedFile } from './git.js';
 import { installHooks, PRIMER_FILE } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
 import { runStryker } from './mutation/stryker.js';
@@ -68,7 +68,7 @@ function gateCommit(root: string): number {
   }
   const { config } = loaded;
   const isTestFile = picomatch(config.testGlobs);
-  const diff = stagedDiff(root);
+  const diff = commitDiff(root);
   let sinceIso: string;
   try {
     sinceIso = evidenceSince(root);

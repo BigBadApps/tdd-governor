@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
-import { parseUnifiedDiff, type FileDiff } from './diff.js';
+import { mergeScoped, parseUnifiedDiff, type FileDiff } from './diff.js';
 
 export function git(root: string, args: string[]): string {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -113,4 +113,24 @@ export function ciBase(root: string, flag: string | undefined, env: NodeJS.Proce
   } catch {
     throw new Error(`no merge-base between HEAD and '${ref}': fetch full history (fetch-depth: 0) and make sure '${ref}' exists`);
   }
+}
+
+// Merge heads when a merge is in progress; empty otherwise. Resolves --git-path relative to root for linked worktrees.
+export function mergeHeads(root: string): string[] {
+  const file = path.resolve(root, git(root, ['rev-parse', '--git-path', 'MERGE_HEAD']).trim());
+  if (!existsSync(file)) return [];
+  return readFileSync(file, 'utf8')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+}
+
+// Diff for commit gating: staged changes vs HEAD, intersected across all merge heads when merging.
+export function commitDiff(root: string): FileDiff[] {
+  const heads = mergeHeads(root);
+  if (heads.length === 0) return stagedDiff(root);
+  return mergeScoped(
+    stagedDiff(root),
+    heads.map((h) => parseUnifiedDiff(git(root, ['diff', '--cached', '-U0', '--no-color', '--no-renames', '--no-ext-diff', h]))),
+  );
 }
