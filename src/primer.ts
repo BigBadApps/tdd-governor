@@ -10,7 +10,9 @@ This repo's git hooks run the governor. Every commit needs three gates green:
 ## What counts as a red
 
 A test failure that is an \`expect(...)\` failure (\`AssertionError\`), recorded in \`.governor/ledger.jsonl\`
-by the reporter. Every \`vitest run\` is recorded automatically; you never write the ledger yourself.
+by the governor's vitest reporter. Every \`vitest run\` is recorded automatically once it is wired into
+\`test.reporters\` in \`vitest.config.ts\` (the governor's \`install\` does not add this for you; check it is
+there before trusting a red run). You never write the ledger yourself.
 
 These are NOT reds, and the commit will be blocked:
 

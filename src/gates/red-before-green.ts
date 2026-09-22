@@ -64,7 +64,13 @@ export function redBeforeGreen(input: {
     const tests = latestTestsFor(f.path, input.records);
     if (tests.length === 0) {
       block = true;
-      findings.push({ file: f.path, message: 'test file changed but has no recorded test run: run the tests first' });
+      const failedToImport = windowed.some((r) => r.collectionErrors.some((e) => e.file === f.path));
+      findings.push({
+        file: f.path,
+        message: failedToImport
+          ? `${f.path}: failed to import every time it ran: not a valid red; stub the implementation (exports present, wrong values) so an expect() fails`
+          : 'test file changed but has no recorded test run: run the tests first',
+      });
       continue;
     }
 
@@ -89,13 +95,17 @@ export function redBeforeGreen(input: {
         continue;
       }
       block = true;
-      const kinds = [...new Set(fails.map((x) => x.failureKind))].join(', ');
+      const kindSet = new Set(fails.map((x) => x.failureKind));
+      const kinds = [...kindSet].join(', ');
       const failedToImport = windowed.some((r) => r.collectionErrors.some((e) => e.file === test.file));
       const stub = 'stub the implementation (exports present, wrong values) so an expect() fails';
+      const onlyTimedOut = fails.length > 0 && kindSet.size === 1 && kindSet.has('timeout');
       findings.push({
         ...where,
         message:
-          fails.length > 0
+          onlyTimedOut
+            ? `${test.id}: only timed out: not a valid red; make it fail fast on an assertion instead`
+            : fails.length > 0
             ? `${test.id}: only failed with ${kinds}: a missing export or thrown error is not a valid red; ${stub}`
             : failedToImport
               ? `${test.id}: never seen failing (the file failed to import, which is not a valid red): ${stub}`

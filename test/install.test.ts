@@ -22,6 +22,7 @@ describe('installHooks agent primer', () => {
     expect(text).toMatch(/AssertionError/);
     expect(text).toMatch(/stub/i);
     expect(text).toMatch(/GOVERNOR_OVERRIDE/);
+    expect(text).toMatch(/test\.reporters|vitest\.config/);
     expect(messages.join('\n')).toMatch(/PRIMER\.md/);
   });
 
