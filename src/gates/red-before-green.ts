@@ -100,13 +100,16 @@ export function redBeforeGreen(input: {
       const failedToImport = windowed.some((r) => r.collectionErrors.some((e) => e.file === test.file));
       const stub = 'stub the implementation (exports present, wrong values) so an expect() fails';
       const onlyTimedOut = fails.length > 0 && kindSet.size === 1 && kindSet.has('timeout');
+      const cause = kindSet.has('timeout')
+        ? `a timeout is not a valid red; make it fail fast on an assertion instead, or fix the timeout separately`
+        : `a missing export or thrown error is not a valid red; ${stub}`;
       findings.push({
         ...where,
         message:
           onlyTimedOut
             ? `${test.id}: only timed out: not a valid red; make it fail fast on an assertion instead`
             : fails.length > 0
-            ? `${test.id}: only failed with ${kinds}: a missing export or thrown error is not a valid red; ${stub}`
+            ? `${test.id}: only failed with ${kinds}: ${cause}`
             : failedToImport
               ? `${test.id}: never seen failing (the file failed to import, which is not a valid red): ${stub}`
               : `${test.id}: never seen failing: run it red (failing assertion) before implementing`,

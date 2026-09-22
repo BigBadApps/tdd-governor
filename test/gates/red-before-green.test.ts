@@ -142,6 +142,17 @@ describe('redBeforeGreen', () => {
     expect(r.findings[0]!.message).not.toMatch(/missing export/);
   });
 
+  it('mentions timeout too when a test both timed out and hit a runtime error', () => {
+    const records = [
+      run('2026-09-18T01:00:00.000Z', [t('adds', 5, 'fail', 'timeout')]),
+      run('2026-09-18T01:30:00.000Z', [t('adds', 5, 'fail', 'runtime_error')]),
+      run('2026-09-18T02:00:00.000Z', [t('adds', 5, 'pass')]),
+    ];
+    const r = redBeforeGreen({ diff: modifiedAt(5), isTestFile, records, sinceIso: SINCE });
+    expect(r.findings[0]!.message).toMatch(/timeout, runtime_error/);
+    expect(r.findings[0]!.message).not.toMatch(/a missing export or thrown error/);
+  });
+
   it('ignores non-test and deleted files', () => {
     const diff: FileDiff[] = [
       { path: 'src/math.ts', status: 'modified', added: [{ line: 1, text: 'x' }], removed: [] },
