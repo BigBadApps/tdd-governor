@@ -44,4 +44,18 @@ wastes a cycle.
 
 Do not use \`git commit --no-verify\` or \`GOVERNOR_OVERRIDE\`. An override is recorded in the ledger.
 If a block looks wrong, stop and tell the human what the governor printed.
+
+## Asking the human for an override
+
+The human decides overrides and may not read code. Answer these three questions in plain words, with the
+evidence for each:
+
+1. **Is the governor wrong here?** A false alarm caused by how the governor works (for example a merge
+   bringing in tests whose reds live in another worktree's ledger), not work that skipped a step.
+2. **Is there real proof each flagged test failed before it passed?** An actual ledger line, per test.
+   "I'm sure it did" is not proof.
+3. **Has the governor bug been written down to fix?** An issue or note naming the false alarm.
+
+If any answer is no or unknown, do not ask for an override. Get the missing red instead, or report the
+gap. Never edit or copy ledger lines to fill it.
 `;
