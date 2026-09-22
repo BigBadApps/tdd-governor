@@ -1,0 +1,32 @@
+# The governor's own CI. It gates itself with the build from this PR, so a change that
+# breaks `gate ci` fails here rather than in a client repo.
+#
+# pull_request only: `gate ci` diffs against GITHUB_BASE_REF, which other events leave
+# empty — it would then fall back to `main` and check almost nothing.
+#
+# The hooks are the first line of defence, but they are local and, by design, skip on a
+# machine without the governor installed. This job is the one that always runs.
+name: ci
+on:
+  pull_request:
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # gate ci needs a merge-base with the PR's base
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - run: npm test
+      # red-before-green is skipped in CI (it needs the local ledger); this runs green,
+      # diff-audit and, when enabled in .governor/config.json, mutation.
+      - name: Gate
+        run: node dist/cli.js gate ci
