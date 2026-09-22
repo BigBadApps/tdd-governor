@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 
@@ -10,6 +10,7 @@ export const ConfigSchema = z
     packageRoot: z
       .string()
       .min(1)
+      .refine((p) => !p.includes('\\'), "use '/' as the separator, like the globs")
       .refine((p) => !path.isAbsolute(p) && !path.posix.normalize(p).startsWith('..'), 'must be a folder inside the repo')
       .optional(),
     testGlobs: z.array(z.string().min(1)).min(1),
@@ -45,6 +46,18 @@ export function loadConfig(root: string): { ok: true; config: GovernorConfig } |
   if (!parsed.success) {
     const issues = parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
     return { ok: false, error: `.governor/config.json invalid: ${issues}` };
+  }
+  if (parsed.data.packageRoot !== undefined) {
+    // The text check above cannot see symlinks: compare real paths so the gates never run outside the repo.
+    let rel: string;
+    try {
+      rel = path.relative(realpathSync(root), realpathSync(packageOf(root, parsed.data).dir));
+    } catch {
+      return { ok: false, error: `.governor/config.json invalid: packageRoot: folder '${parsed.data.packageRoot}' not found` };
+    }
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+      return { ok: false, error: `.governor/config.json invalid: packageRoot: must be a folder inside the repo` };
+    }
   }
   return { ok: true, config: parsed.data };
 }
