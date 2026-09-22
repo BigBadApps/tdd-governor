@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
-import { realpathSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import picomatch from 'picomatch';
 import { runVitest } from './adapters/vitest/run.js';
@@ -11,7 +12,7 @@ import { green } from './gates/green.js';
 import { mutation } from './gates/mutation.js';
 import { redBeforeGreen } from './gates/red-before-green.js';
 import { changedLines, ciBase, evidenceSince, pushBase, pushDiff, repoRoot, stagedDiff, stagedFile } from './git.js';
-import { installHooks } from './install.js';
+import { installHooks, PRIMER_FILE } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
 import { runStryker } from './mutation/stryker.js';
 import { decide, formatResults } from './report.js';
@@ -43,6 +44,7 @@ function finish(root: string, config: GovernorConfig, results: GateResult[], ove
       return 0;
     case 'fail':
       console.log('\ngovernor: blocked. Fix the findings above, or set GOVERNOR_OVERRIDE="<reason>" (recorded in the ledger).');
+      if (existsSync(path.join(root, PRIMER_FILE))) console.log(`governor: read ${PRIMER_FILE} for what counts as a valid red and how to get one.`);
       return 1;
     case 'bad-override':
       console.log('\ngovernor: GOVERNOR_OVERRIDE needs a non-empty reason.');

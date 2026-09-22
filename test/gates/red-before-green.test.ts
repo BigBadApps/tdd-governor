@@ -125,6 +125,34 @@ describe('redBeforeGreen', () => {
     expect(r.findings[0]!.message).toMatch(/no recorded test run/);
   });
 
+  it('says how to get a valid red when a test file never once got past import', () => {
+    const records = [{ ...run('2026-09-18T01:00:00.000Z', []), exitCode: 1, collectionErrors: [{ file: F, message: 'Cannot find module ../src/math' }] }];
+    const r = redBeforeGreen({ diff: modifiedAt(5), isTestFile, records, sinceIso: SINCE });
+    expect(r.status).toBe('BLOCK');
+    expect(r.findings[0]!.message).toMatch(/failed to import.*not a valid red.*stub/);
+  });
+
+  it('tells a timed-out test the actual cause, not "missing export"', () => {
+    const records = [
+      run('2026-09-18T01:00:00.000Z', [t('adds', 5, 'fail', 'timeout')]),
+      run('2026-09-18T02:00:00.000Z', [t('adds', 5, 'pass')]),
+    ];
+    const r = redBeforeGreen({ diff: modifiedAt(5), isTestFile, records, sinceIso: SINCE });
+    expect(r.findings[0]!.message).toMatch(/only timed out/);
+    expect(r.findings[0]!.message).not.toMatch(/missing export/);
+  });
+
+  it('mentions timeout too when a test both timed out and hit a runtime error', () => {
+    const records = [
+      run('2026-09-18T01:00:00.000Z', [t('adds', 5, 'fail', 'timeout')]),
+      run('2026-09-18T01:30:00.000Z', [t('adds', 5, 'fail', 'runtime_error')]),
+      run('2026-09-18T02:00:00.000Z', [t('adds', 5, 'pass')]),
+    ];
+    const r = redBeforeGreen({ diff: modifiedAt(5), isTestFile, records, sinceIso: SINCE });
+    expect(r.findings[0]!.message).toMatch(/timeout, runtime_error/);
+    expect(r.findings[0]!.message).not.toMatch(/a missing export or thrown error/);
+  });
+
   it('ignores non-test and deleted files', () => {
     const diff: FileDiff[] = [
       { path: 'src/math.ts', status: 'modified', added: [{ line: 1, text: 'x' }], removed: [] },
@@ -156,6 +184,24 @@ describe('redBeforeGreen', () => {
     const r = redBeforeGreen({ diff: modifiedAt(15), isTestFile, records, sinceIso: SINCE });
     expect(r.status).toBe('BLOCK');
     expect(r.findings[0]!.message).toMatch(/adds: never seen failing/);
+  });
+
+  it('says how to get a valid red when the only failure was a missing export or thrown error', () => {
+    const records = [
+      run('2026-09-18T01:00:00.000Z', [t('adds', 5, 'fail', 'runtime_error')]),
+      run('2026-09-18T02:00:00.000Z', [t('adds', 5, 'pass')]),
+    ];
+    const r = redBeforeGreen({ diff: modifiedAt(5), isTestFile, records, sinceIso: SINCE });
+    expect(r.findings[0]!.message).toMatch(/missing export or thrown error.*stub.*expect\(\)/);
+  });
+
+  it('names an import failure when the file never got past collection', () => {
+    const records = [
+      { ...run('2026-09-18T01:00:00.000Z', []), exitCode: 1, collectionErrors: [{ file: F, message: 'Cannot find module ../src/math' }] },
+      run('2026-09-18T02:00:00.000Z', [t('adds', 5, 'pass')]),
+    ];
+    const r = redBeforeGreen({ diff: modifiedAt(5), isTestFile, records, sinceIso: SINCE });
+    expect(r.findings[0]!.message).toMatch(/failed to import.*not a valid red.*stub/);
   });
 
   it('does not judge a removal-only edit to a test file (diff audit owns removals)', () => {
