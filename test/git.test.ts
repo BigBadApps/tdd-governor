@@ -121,6 +121,16 @@ describe('pushBase / pushDiff', () => {
     expect(pushDiff(root, pushBase(root)).map((f) => f.path)).toEqual(['a.ts']);
   });
 
+  it('audits a push of main itself when main tracks a remote other than origin', () => {
+    const { root, g } = pushedFeature();
+    g('remote', 'rename', 'origin', 'upstream');
+    g('checkout', '-q', 'main');
+    g('branch', '-q', '-u', 'upstream/main');
+    writeFileSync(path.join(root, 'a.ts'), 'one\nmain only\n');
+    g('commit', '-qam', 'direct to main');
+    expect(pushDiff(root, pushBase(root)).map((f) => f.path)).toEqual(['a.ts']);
+  });
+
   it("excludes origin/main's changes when local main is stale", () => {
     const { root, g } = pushedFeature();
     g('branch', '-f', 'main', 'main~1'); // local main behind origin/main
