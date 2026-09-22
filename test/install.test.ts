@@ -26,6 +26,16 @@ describe('installHooks agent primer', () => {
     expect(messages.join('\n')).toMatch(/PRIMER\.md/);
   });
 
+  it('tells agents to escalate an override request with the three evidence questions', () => {
+    const root = repo();
+    installHooks(root, '/x/cli.js', hooks);
+    const text = readFileSync(path.join(root, '.governor', 'PRIMER.md'), 'utf8');
+    expect(text).toMatch(/Is the governor wrong here\?/);
+    expect(text).toMatch(/proof each flagged test failed/);
+    expect(text).toMatch(/governor bug been written down/);
+    expect(text).toMatch(/any answer is no or unknown/i);
+  });
+
   it('refreshes a stale primer on reinstall', () => {
     const root = repo();
     installHooks(root, '/x/cli.js', hooks);
