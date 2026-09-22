@@ -6,6 +6,12 @@ import { z } from 'zod';
 export const ConfigSchema = z
   .object({
     adapter: z.enum(['vitest', 'pytest']),
+    // Monorepo: the folder (relative to the git root) whose test runner the governor drives. Globs stay repo-relative.
+    packageRoot: z
+      .string()
+      .min(1)
+      .refine((p) => !path.isAbsolute(p) && !path.posix.normalize(p).startsWith('..'), 'must be a folder inside the repo')
+      .optional(),
     testGlobs: z.array(z.string().min(1)).min(1),
     sourceGlobs: z.array(z.string().min(1)).min(1),
     mutation: z.object({ enabled: z.boolean(), timeoutMs: z.number().int().positive() }),
@@ -14,6 +20,17 @@ export const ConfigSchema = z
   .strict();
 
 export type GovernorConfig = z.infer<typeof ConfigSchema>;
+
+// Where the test runner lives, and how its package-relative paths map to the repo-relative paths git diffs use.
+export function packageOf(root: string, config: GovernorConfig) {
+  const rel = path.posix.normalize(config.packageRoot ?? '.').replace(/\/$/, '');
+  return {
+    rel,
+    dir: path.join(root, rel),
+    toRepo: (p: string) => (rel === '.' ? p : path.posix.join(rel, p)),
+    toPackage: (p: string) => (rel === '.' ? p : path.posix.relative(rel, p)),
+  };
+}
 
 export function loadConfig(root: string): { ok: true; config: GovernorConfig } | { ok: false; error: string } {
   const file = path.join(root, '.governor', 'config.json');

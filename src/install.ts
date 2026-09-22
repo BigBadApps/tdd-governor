@@ -10,6 +10,7 @@ export function installHooks(
   root: string,
   cliPath: string,
   hooks: Array<{ name: string; command: string }>,
+  packageRel = '.',
 ): { ok: boolean; messages: string[] } {
   const messages: string[] = [];
   let ok = true;
@@ -34,9 +35,10 @@ export function installHooks(
   messages.push(`wrote ${PRIMER_FILE}: point your agents at it (for example from AGENTS.md or CLAUDE.md)`);
 
   const gitignore = path.join(root, '.gitignore');
-  const entry = '.governor/ledger.jsonl';
-  const current = existsSync(gitignore) ? readFileSync(gitignore, 'utf8') : '';
-  if (!current.split('\n').includes(entry)) {
+  const entries = packageRel === '.' ? ['.governor/ledger.jsonl'] : ['.governor/ledger.jsonl', `${packageRel}/.governor/ledger.jsonl`];
+  for (const entry of entries) {
+    const current = existsSync(gitignore) ? readFileSync(gitignore, 'utf8') : '';
+    if (current.split('\n').includes(entry)) continue;
     writeFileSync(gitignore, `${current}${current === '' || current.endsWith('\n') ? '' : '\n'}${entry}\n`);
     messages.push(`added ${entry} to .gitignore`);
   }

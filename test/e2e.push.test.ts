@@ -44,4 +44,36 @@ describe('governor gate push (e2e)', () => {
     expect(res.status).not.toBe(0);
     expect(res.stdout + res.stderr).toMatch(/\[BLOCK\] mutation[\s\S]*src\/clamp\.ts:3/);
   }, 300_000);
+
+  it('runs Stryker inside packageRoot and reports the surviving mutant at its repo path', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'gov-push-mono-'));
+    const pkg = path.join(root, 'pkg');
+    const g = (...a: string[]) => execFileSync('git', a, { cwd: root, encoding: 'utf8' });
+    cpSync(path.resolve(__dirname, 'fixtures/mutation-project'), pkg, { recursive: true });
+    symlinkSync(path.join(governorRoot, 'node_modules'), path.join(pkg, 'node_modules'));
+    mkdirSync(path.join(root, '.governor'), { recursive: true });
+    writeFileSync(path.join(root, '.governor/config.json'), JSON.stringify({
+      adapter: 'vitest', packageRoot: 'pkg', testGlobs: ['pkg/tests/**/*.check.ts'], sourceGlobs: ['pkg/src/**/*.ts'],
+      mutation: { enabled: true, timeoutMs: 300000 }, runTimeoutMs: 120000,
+    }));
+    writeFileSync(path.join(root, '.gitignore'), 'node_modules\nreports\n.stryker-tmp\n');
+    writeFileSync(path.join(pkg, 'src/clamp.ts'), 'export function clamp(x: number, lo: number, hi: number): number {\n  if (x < lo) return lo;\n  return x;\n}\n');
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 'e@example.com');
+    g('config', 'user.name', 'e');
+    g('add', '-A');
+    g('commit', '-q', '--no-verify', '-m', 'base');
+    const remote = mkdtempSync(path.join(tmpdir(), 'gov-remote-'));
+    execFileSync('git', ['init', '-q', '--bare', remote]);
+    g('remote', 'add', 'origin', remote);
+    g('push', '-q', '-u', 'origin', 'main');
+    execFileSync('node', [cli, 'install'], { cwd: root });
+
+    cpSync(path.resolve(__dirname, 'fixtures/mutation-project/src/clamp.ts'), path.join(pkg, 'src/clamp.ts'));
+    g('commit', '-q', '--no-verify', '-am', 'upper bound');
+
+    const res = spawnSync('git', ['push', '-q', 'origin', 'main'], { cwd: root, encoding: 'utf8' });
+    expect(res.status).not.toBe(0);
+    expect(res.stdout + res.stderr).toMatch(/\[BLOCK\] mutation[\s\S]*pkg\/src\/clamp\.ts:3/);
+  }, 300_000);
 });

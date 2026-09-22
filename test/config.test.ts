@@ -43,6 +43,18 @@ describe('loadConfig', () => {
     if (!result.ok) expect(result.error).toMatch(/testGlobs/);
   });
 
+  it('accepts a packageRoot folder inside the repo', () => {
+    expect(loadConfig(repoWith(JSON.stringify({ ...valid, packageRoot: 'frontend' })))).toEqual({ ok: true, config: { ...valid, packageRoot: 'frontend' } });
+  });
+
+  it('rejects a packageRoot outside the repo', () => {
+    for (const packageRoot of ['../elsewhere', '/abs/path', 'a/../../b']) {
+      const result = loadConfig(repoWith(JSON.stringify({ ...valid, packageRoot })));
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error).toMatch(/packageRoot/);
+    }
+  });
+
   it('fails on an unknown adapter', () => {
     expect(loadConfig(repoWith(JSON.stringify({ ...valid, adapter: 'jest' }))).ok).toBe(false);
   });

@@ -247,3 +247,59 @@ describe('clean merges (pre-merge-commit)', () => {
   });
 });
 
+describe('monorepo (packageRoot)', () => {
+  // Tests live in pkg/ with their own vitest config and node_modules; the git root is one level up.
+  function makeMonorepo(): string {
+    const root = mkdtempSync(path.join(tmpdir(), 'gov-mono-'));
+    tmpDirs.push(root);
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+    g('init', '-b', 'main', '-q');
+    g('config', 'user.email', 'e2e@example.com');
+    g('config', 'user.name', 'e2e');
+    mkdirSync(path.join(root, 'pkg'));
+    symlinkSync(path.join(governorRoot, 'node_modules'), path.join(root, 'pkg', 'node_modules'));
+    mkdirSync(path.join(root, '.governor'));
+    writeFileSync(path.join(root, '.governor', 'config.json'), JSON.stringify({
+      adapter: 'vitest', packageRoot: 'pkg', testGlobs: ['pkg/tests/**/*.test.ts'], sourceGlobs: ['pkg/src/**/*.ts'],
+      mutation: { enabled: false, timeoutMs: 300000 }, runTimeoutMs: 120000,
+    }));
+    writeFileSync(path.join(root, 'pkg', 'vitest.config.ts'), [
+      "import { defineConfig } from 'vitest/config';",
+      `import GovernorReporter from ${JSON.stringify(path.join(governorRoot, 'dist/adapters/vitest/reporter.js'))};`,
+      "export default defineConfig({ test: { include: ['tests/**/*.test.ts'], includeTaskLocation: true, reporters: ['default', new GovernorReporter()] } });",
+    ].join('\n'));
+    writeFileSync(path.join(root, '.gitignore'), 'node_modules\n');
+    g('add', '-A');
+    g('commit', '-q', '--no-verify', '-m', 'init');
+    execFileSync('node', [cli, 'install'], { cwd: root, stdio: 'pipe' });
+    return root;
+  }
+  const addTest = "import { expect, it } from 'vitest';\nimport { add } from '../src/add';\nit('adds', () => {\n  expect(add(2, 3)).toBe(5);\n});\n";
+
+  it('install ignores the package ledger', () => {
+    const root = makeMonorepo();
+    expect(readFileSync(path.join(root, '.gitignore'), 'utf8').split('\n')).toContain('pkg/.governor/ledger.jsonl');
+  });
+
+  it('passes a test-first commit whose red was run directly inside the package', () => {
+    const root = makeMonorepo();
+    write(root, 'pkg/src/add.ts', 'export const add = (a: number, b: number) => 0;\n');
+    write(root, 'pkg/tests/add.test.ts', addTest);
+    spawnSync('npx', ['--no-install', 'vitest', 'run'], { cwd: path.join(root, 'pkg'), encoding: 'utf8' });
+    write(root, 'pkg/src/add.ts', 'export const add = (a: number, b: number) => a + b;\n');
+    const res = commit(root);
+    expect(res.stderr + res.stdout).toMatch(/\[PASS\] green/);
+    expect(res.stderr + res.stdout).toMatch(/\[PASS\] red-before-green/);
+    expect(res.status).toBe(0);
+  });
+
+  it('blocks a package test that was never seen red, naming its repo path', () => {
+    const root = makeMonorepo();
+    write(root, 'pkg/src/add.ts', 'export const add = (a: number, b: number) => a + b;\n');
+    write(root, 'pkg/tests/add.test.ts', addTest);
+    const res = commit(root);
+    expect(res.status).not.toBe(0);
+    expect(res.stderr + res.stdout).toMatch(/pkg\/tests\/add\.test\.ts[\s\S]*never seen failing/);
+  });
+});
+

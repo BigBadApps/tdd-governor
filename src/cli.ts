@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import picomatch from 'picomatch';
 import { runVitest } from './adapters/vitest/run.js';
-import { loadConfig, type GovernorConfig } from './config.js';
+import { loadConfig, packageOf, type GovernorConfig } from './config.js';
 import type { FileDiff } from './diff.js';
 import { diffAudit } from './gates/diff-audit.js';
 import { green } from './gates/green.js';
@@ -16,7 +16,7 @@ import { installHooks, PRIMER_FILE } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
 import { runStryker } from './mutation/stryker.js';
 import { decide, formatResults } from './report.js';
-import type { GateResult, RunOutcome } from './types.js';
+import type { GateResult, LedgerRecord, RunOutcome } from './types.js';
 
 const USAGE = 'usage: governor <run | gate commit | gate push | gate ci | install>';
 const EXAMPLE_CONFIG = JSON.stringify(
@@ -31,9 +31,26 @@ const EXAMPLE_CONFIG = JSON.stringify(
   2,
 );
 
+// The reporter writes paths relative to the package it ran in; gates compare them with repo-relative diff paths.
+function toRepoRecords(records: LedgerRecord[], toRepo: (p: string) => string): LedgerRecord[] {
+  return records.map((r) => ({
+    ...r,
+    tests: r.tests.map((t) => ({ ...t, file: toRepo(t.file), id: toRepo(t.file) + t.id.slice(t.file.length) })),
+    collectionErrors: r.collectionErrors.map((e) => (e.file === '(unhandled)' ? e : { ...e, file: toRepo(e.file) })),
+  }));
+}
+
+function packageLedger(root: string, config: GovernorConfig): { records: LedgerRecord[]; corrupt: number } {
+  const pkg = packageOf(root, config);
+  const { records, corrupt } = readLedger(ledgerPath(pkg.dir));
+  return { records: toRepoRecords(records, pkg.toRepo), corrupt };
+}
+
 function runTests(config: GovernorConfig, root: string, extraArgs: string[] = []): RunOutcome {
-  if (config.adapter === 'vitest') return runVitest(root, config.runTimeoutMs, extraArgs);
-  return { kind: 'unavailable', reason: `adapter '${config.adapter}' is not implemented yet` };
+  if (config.adapter !== 'vitest') return { kind: 'unavailable', reason: `adapter '${config.adapter}' is not implemented yet` };
+  const pkg = packageOf(root, config);
+  const outcome = runVitest(pkg.dir, config.runTimeoutMs, extraArgs);
+  return outcome.kind === 'completed' ? { kind: 'completed', record: toRepoRecords([outcome.record], pkg.toRepo)[0]! } : outcome;
 }
 
 function finish(root: string, config: GovernorConfig, results: GateResult[], override: string | undefined): number {
@@ -77,7 +94,7 @@ function gateCommit(root: string, env?: NodeJS.ProcessEnv): number {
     return 2;
   }
   const greenResult = green(runTests(config, root));
-  const { records, corrupt } = readLedger(ledgerPath(root));
+  const { records, corrupt } = packageLedger(root, config);
   if (corrupt > 0) console.log(`governor: skipped ${corrupt} corrupt ledger line(s)`);
   const results = [
     greenResult,
@@ -99,11 +116,12 @@ function mutationGate(root: string, config: GovernorConfig, diff: FileDiff[]): G
   const changed = changedLines(diff, (p) => isSource(p) && !isTest(p));
   if (changed.size === 0) return { gate: 'mutation', status: 'PASS', findings: [] };
 
+  const pkg = packageOf(root, config);
   const run = config.adapter === 'vitest'
-    ? runStryker(root, [...changed.keys()], config.mutation.timeoutMs)
+    ? runStryker(pkg.dir, [...changed.keys()].map(pkg.toPackage), config.mutation.timeoutMs)
     : { ok: false as const, error: `mutation for adapter '${config.adapter}' is not implemented yet` };
   return run.ok
-    ? mutation({ mutants: run.mutants, changed })
+    ? mutation({ mutants: run.mutants.map((m) => ({ ...m, file: pkg.toRepo(m.file) })), changed })
     : { gate: 'mutation', status: 'GATE_UNAVAILABLE', findings: [{ file: '(mutation)', message: run.error }] };
 }
 
@@ -204,7 +222,7 @@ export function main(argv: string[]): number {
       { name: 'pre-commit', command: 'gate commit' },
       { name: 'pre-merge-commit', command: 'gate commit --merge' },
       { name: 'pre-push', command: 'gate push' },
-    ]);
+    ], packageOf(root, loaded.config).rel);
     messages.forEach((m) => console.log(`governor: ${m}`));
     return ok ? 0 : 1;
   }
