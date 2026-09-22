@@ -66,3 +66,21 @@ describe('installHooks agent primer', () => {
     expect(readFileSync(file, 'utf8')).not.toBe('old text\n');
   });
 });
+
+describe('installHooks refuses a foreign hook', () => {
+  it('refuses to overwrite a foreign hook and suggests a portable snippet, not an absolute cli path', () => {
+    const root = repo();
+    const file = path.join(root, '.git', 'hooks', 'pre-commit');
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, '#!/bin/sh\necho mine\n');
+    const { ok, messages } = installHooks(root, '/x/cli.js', hooks);
+    expect(ok).toBe(false);
+    expect(readFileSync(file, 'utf8')).toBe('#!/bin/sh\necho mine\n');
+    const message = messages.join('\n');
+    expect(message).toContain('refusing to overwrite existing pre-commit hook');
+    expect(message).not.toContain('/x/cli.js');
+    expect(message).toContain('tdd-governor-cli-path');
+    expect(message).toContain('GOVERNOR_CLI');
+    expect(message).toContain('gate commit');
+  });
+});
