@@ -185,4 +185,10 @@ describe('mergeScoped', () => {
     const theirsDeleted: FileDiff[][] = [[{ path: 'a.ts', status: 'deleted', added: [], removed: [{ line: 1, text: 'x' }] }]];
     expect(mergeScoped(oursDeleted, theirsDeleted)[0]?.status).toBe('deleted');
   });
+  it('matches repeated removed lines by count, not just by text', () => {
+    const line = 'expect(x).toBe(1);';
+    const ours: FileDiff[] = [{ path: 'a.test.ts', status: 'modified', added: [], removed: [{ line: 3, text: line }, { line: 4, text: line }] }];
+    const theirs: FileDiff[][] = [[{ path: 'a.test.ts', status: 'modified', added: [], removed: [{ line: 3, text: line }] }]];
+    expect(mergeScoped(ours, theirs)[0]!.removed).toEqual([{ line: 3, text: line }]);
+  });
 });
