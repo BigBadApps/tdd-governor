@@ -24,8 +24,9 @@ exec node "$governor_cli" ${command}
 `;
 
 // Advice for a hook we may not touch: the same resolution, as lines to paste into a hand-written hook.
+// `if` rather than `&&` so that pasting it last still exits 0 where the governor is not installed.
 const hookSnippet = (command: string) =>
-  `${RESOLVE_CLI}\n[ -f "$governor_cli" ] && { node "$governor_cli" ${command} || exit 1; }`;
+  `${RESOLVE_CLI}\nif [ -f "$governor_cli" ]; then node "$governor_cli" ${command} || exit 1; fi`;
 
 export function installHooks(
   root: string,

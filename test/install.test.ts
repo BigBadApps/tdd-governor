@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -82,5 +82,21 @@ describe('installHooks refuses a foreign hook', () => {
     expect(message).toContain('tdd-governor-cli-path');
     expect(message).toContain('GOVERNOR_CLI');
     expect(message).toContain('gate commit');
+  });
+
+  it('suggests lines that succeed on a machine without the governor, like the generated hook', () => {
+    const root = repo();
+    const hook = path.join(root, '.git', 'hooks', 'pre-commit');
+    mkdirSync(path.dirname(hook), { recursive: true });
+    writeFileSync(hook, '#!/bin/sh\necho mine\n');
+    const { messages } = installHooks(root, '/x/cli.js', hooks);
+    const snippet = messages[0].split('yourself:\n')[1];
+
+    const other = repo();
+    const handWritten = path.join(other, 'hand-written-hook');
+    writeFileSync(handWritten, `#!/bin/sh\necho mine\n${snippet}\n`);
+    chmodSync(handWritten, 0o755);
+    const run = spawnSync(handWritten, { cwd: other, encoding: 'utf8' });
+    expect(run.status).toBe(0);
   });
 });
