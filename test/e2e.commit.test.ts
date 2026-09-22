@@ -247,6 +247,45 @@ describe('clean merges (pre-merge-commit)', () => {
   });
 });
 
+describe('linked worktrees share the install', () => {
+  const neverRed = "import { it } from 'vitest';\nit('never seen red', () => {});\n";
+
+  it('gates a commit in a linked worktree, which has no pointer of its own', () => {
+    const root = makeRepo();
+    const wt = path.join(root, 'wt');
+    execFileSync('git', ['worktree', 'add', '-q', wt, '-b', 'wt-branch'], { cwd: root });
+    write(wt, 'tests/a.test.ts', neverRed);
+    const res = commit(wt);
+    expect(res.stderr + res.stdout).not.toMatch(/governor: not installed/);
+    expect(res.status).not.toBe(0);
+  });
+
+  it('keeps the main worktree gated when install is run from a linked worktree', () => {
+    const root = makeRepo();
+    const wt = path.join(root, 'wt');
+    execFileSync('git', ['worktree', 'add', '-q', wt, '-b', 'wt-branch'], { cwd: root });
+    // As if the governor had only ever been installed from the worktree.
+    rmSync(path.join(root, '.git', 'tdd-governor-cli-path'), { force: true });
+    rmSync(path.join(root, '.governor', 'cli-path'), { force: true });
+    execFileSync('node', [cli, 'install'], { cwd: wt, stdio: 'pipe' });
+    write(root, 'tests/a.test.ts', neverRed);
+    const res = commit(root);
+    expect(res.stderr + res.stdout).not.toMatch(/governor: not installed/);
+    expect(res.status).not.toBe(0);
+  });
+});
+
+describe('a clone without the governor installed', () => {
+  it('lets the commit through with a notice instead of blocking it', () => {
+    const root = makeRepo();
+    rmSync(path.join(root, '.git', 'tdd-governor-cli-path'));
+    write(root, 'tests/a.test.ts', "import { it } from 'vitest';\nit('never seen red', () => {});\n");
+    const res = commit(root);
+    expect(res.stderr + res.stdout).toMatch(/governor: not installed/);
+    expect(res.status).toBe(0);
+  });
+});
+
 describe('monorepo (packageRoot)', () => {
   // Tests live in pkg/ with their own vitest config and node_modules; the git root is one level up.
   function makeMonorepo(): string {
