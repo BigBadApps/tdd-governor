@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -186,3 +186,64 @@ describe('governor gate commit (e2e)', () => {
     expect(passRes.stderr + passRes.stdout).toMatch(/\[PASS\] red-before-green/);
   });
 });
+
+describe('clean merges (pre-merge-commit)', () => {
+  it('install writes a pre-merge-commit hook', () => {
+    const root = makeRepo();
+    const hookRel = execFileSync('git', ['rev-parse', '--git-path', 'hooks/pre-merge-commit'], { cwd: root, encoding: 'utf8' }).trim();
+    const hookPath = path.resolve(root, hookRel);
+    expect(existsSync(hookPath)).toBe(true);
+    const content = existsSync(hookPath) ? readFileSync(hookPath, 'utf8') : '';
+    expect(content).toContain('# tdd-governor');
+    expect(content).toContain('gate commit');
+  });
+
+  it("gates a clean merge and passes work TDD'd on the other branch", () => {
+    const root = makeRepo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+
+    g('checkout', '-b', 'feature');
+    write(root, 'src/m.ts', 'export const m = 1;\n');
+    write(root, 'tests/m.test.ts', "import { expect, it } from 'vitest';\nimport { m } from '../src/m';\nit('m1', () => {\n  expect(m).toBe(1);\n});\n");
+    g('add', '-A');
+    g('commit', '-q', '--no-verify', '-m', 'feature work without a red in this repo');
+
+    g('checkout', 'main');
+    write(root, 'src/unrelated.ts', 'export const u = 1;\n');
+    g('add', '-A');
+    g('commit', '-q', '--no-verify', '-m', 'unrelated main work');
+
+    const mergeRes = spawnSync('git', ['merge', '--no-edit', 'feature'], { cwd: root, encoding: 'utf8' });
+    expect(mergeRes.status).toBe(0);
+    expect(mergeRes.stdout + mergeRes.stderr).toContain('[PASS] red-before-green');
+  });
+
+  it('blocks a clean merge whose result fails the suite', () => {
+    const root = makeRepo();
+    const g = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
+
+    write(root, 'src/a.ts', 'export const a = 1;\n');
+    write(root, 'src/b.ts', 'export const b = 1;\n');
+    g('add', '-A');
+    g('commit', '-q', '--no-verify', '-m', 'base a and b');
+
+    g('checkout', '-b', 'feature');
+    write(root, 'src/a.ts', 'export const a = 2;\n');
+    write(root, 'tests/ab.test.ts', "import { expect, it } from 'vitest';\nimport { a } from '../src/a';\nimport { b } from '../src/b';\nit('adds a and b', () => {\n  expect(a + b).toBe(3);\n});\n");
+    g('add', '-A');
+    g('commit', '-q', '--no-verify', '-m', 'feature sets a=2 and tests a+b=3');
+
+    g('checkout', 'main');
+    write(root, 'src/b.ts', 'export const b = 2;\n');
+    g('add', '-A');
+    g('commit', '-q', '--no-verify', '-m', 'main sets b=2');
+
+    const mainSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    const mergeRes = spawnSync('git', ['merge', '--no-edit', 'feature'], { cwd: root, encoding: 'utf8' });
+    expect(mergeRes.status).not.toBe(0);
+    expect(mergeRes.stdout + mergeRes.stderr).toContain('[BLOCK] green');
+    const headSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    expect(headSha).toBe(mainSha);
+  });
+});
+

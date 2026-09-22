@@ -202,6 +202,7 @@ export function main(argv: string[]): number {
     const cliPath = realpathSync(fileURLToPath(import.meta.url));
     const { ok, messages } = installHooks(root, cliPath, [
       { name: 'pre-commit', command: 'gate commit' },
+      { name: 'pre-merge-commit', command: 'gate commit' },
       { name: 'pre-push', command: 'gate push' },
     ]);
     messages.forEach((m) => console.log(`governor: ${m}`));

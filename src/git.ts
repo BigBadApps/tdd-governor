@@ -116,7 +116,12 @@ export function ciBase(root: string, flag: string | undefined, env: NodeJS.Proce
 }
 
 // Merge heads when a merge is in progress; empty otherwise. Resolves --git-path relative to root for linked worktrees.
-export function mergeHeads(root: string): string[] {
+export function mergeHeads(root: string, env: NodeJS.ProcessEnv = process.env): string[] {
+  const fromEnv = Object.keys(env)
+    .filter((k) => /^GITHEAD_[0-9a-f]{40,64}$/i.test(k))
+    .map((k) => k.slice('GITHEAD_'.length).toLowerCase());
+  if (fromEnv.length > 0) return fromEnv;
+
   const file = path.resolve(root, git(root, ['rev-parse', '--git-path', 'MERGE_HEAD']).trim());
   if (!existsSync(file)) return [];
   return readFileSync(file, 'utf8')
