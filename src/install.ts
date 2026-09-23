@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { git } from './git.js';
-import { PRIMER } from './primer.js';
+import { findVitestConfig, renderPrimer } from './primer.js';
 
 const MARKER = '# tdd-governor';
 
@@ -60,9 +60,12 @@ export function installHooks(
   writeFileSync(pointer, `${cliPath}\n`);
   messages.push(`wrote ${CLI_PATH_FILE} in the git directory: this machine's governor, shared by every worktree and kept out of the tracked hook`);
 
+  const packageDir = path.join(root, packageRel);
+  const configFile = findVitestConfig(packageDir, existsSync);
+  const configDisplay = configFile && (packageRel === '.' ? configFile : path.posix.join(packageRel, configFile));
   const primer = path.join(root, PRIMER_FILE);
   mkdirSync(path.dirname(primer), { recursive: true });
-  writeFileSync(primer, PRIMER);
+  writeFileSync(primer, renderPrimer(configDisplay));
   messages.push(`wrote ${PRIMER_FILE}: point your agents at it (for example from AGENTS.md or CLAUDE.md)`);
 
   const gitignore = path.join(root, '.gitignore');

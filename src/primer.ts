@@ -1,5 +1,11 @@
 // Written to .governor/PRIMER.md by `governor install`. Agents that hit a block read this instead of the governor's source.
-export const PRIMER = `# TDD governor: what agents need to know
+// configFile: the vitest/vite config install found the reporter should be wired into (repo-relative, package-scoped
+// for a monorepo), or undefined when none was found — then the wording stays generic rather than naming a guess.
+export function renderPrimer(configFile: string | undefined): string {
+  const reporterLine = configFile
+    ? `\`test.reporters\` in \`${configFile}\` (the governor's \`install\` does not add this for you; check it is`
+    : "`test.reporters` in your vitest config (a `vitest.config.*`, or `test` in `vite.config.*` for a Vite\nproject; the governor's `install` does not add this for you; check it is";
+  return `# TDD governor: what agents need to know
 
 This repo's git hooks run the governor. Every commit needs three gates green:
 
@@ -11,7 +17,7 @@ This repo's git hooks run the governor. Every commit needs three gates green:
 
 A test failure that is an \`expect(...)\` failure (\`AssertionError\`), recorded in \`.governor/ledger.jsonl\`
 by the governor's vitest reporter. Every \`vitest run\` is recorded automatically once it is wired into
-\`test.reporters\` in \`vitest.config.ts\` (the governor's \`install\` does not add this for you; check it is
+${reporterLine}
 there before trusting a red run). You never write the ledger yourself.
 
 These are NOT reds, and the commit will be blocked:
@@ -60,3 +66,12 @@ evidence for each:
 If any answer is no or unknown, do not ask for an override. Get the missing red instead, or report the
 gap. Never edit or copy ledger lines to fill it.
 `;
+}
+
+// Vitest resolves its own config first; a Vite project (test in vite.config.*) is the fallback.
+const CANDIDATES = ['vitest.config.ts', 'vitest.config.js', 'vitest.config.mts', 'vitest.config.mjs',
+  'vite.config.ts', 'vite.config.js', 'vite.config.mts', 'vite.config.mjs'];
+
+export function findVitestConfig(packageDir: string, existsSync: (p: string) => boolean): string | undefined {
+  return CANDIDATES.find((name) => existsSync(`${packageDir}/${name}`));
+}
