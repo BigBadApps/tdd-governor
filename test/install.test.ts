@@ -84,6 +84,30 @@ describe('installHooks refuses a foreign hook', () => {
     expect(message).toContain('gate commit');
   });
 
+  it('refuses a hand-written hook that merely mentions the governor in a comment', () => {
+    // A real incident: a comment describing the governor's snippet made install rewrite the whole
+    // hook, destroying a main-branch guard and a git-lfs delegate that lived in the same file.
+    const root = repo();
+    const file = path.join(root, '.git', 'hooks', 'pre-push');
+    mkdirSync(path.dirname(file), { recursive: true });
+    const mine = ["#!/bin/sh", "# tdd-governor's push gate is appended below; the guard above it is ours.", 'echo guard', ''].join('\n');
+    writeFileSync(file, mine);
+    const { ok, messages } = installHooks(root, '/x/cli.js', [{ name: 'pre-push', command: 'gate push' }]);
+    expect(ok).toBe(false);
+    expect(readFileSync(file, 'utf8')).toBe(mine);
+    expect(messages.join('\n')).toContain('refusing to overwrite existing pre-push hook');
+  });
+
+  it('upgrades a hook it wrote itself, including one from an older version', () => {
+    const root = repo();
+    const file = path.join(root, '.git', 'hooks', 'pre-commit');
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, '#!/bin/sh\n# tdd-governor\nexec node "/old/path/cli.js" gate commit\n');
+    const { ok } = installHooks(root, '/x/cli.js', hooks);
+    expect(ok).toBe(true);
+    expect(readFileSync(file, 'utf8')).not.toContain('/old/path/cli.js');
+  });
+
   it('suggests lines that succeed on a machine without the governor, like the generated hook', () => {
     const root = repo();
     const hook = path.join(root, '.git', 'hooks', 'pre-commit');
