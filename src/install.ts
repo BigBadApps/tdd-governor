@@ -4,6 +4,11 @@ import { git } from './git.js';
 import { PRIMER } from './primer.js';
 
 const MARKER = '# tdd-governor';
+
+// Ours only when the marker is the line the generator writes, right under the shebang. A substring
+// test once matched a hand-written hook whose comment merely described the governor, and install
+// rewrote the file — taking a main-branch guard and a git-lfs delegate with it.
+const isOurs = (content: string) => content.split('\n')[1]?.trim() === MARKER;
 export const PRIMER_FILE = '.governor/PRIMER.md';
 // One pointer per repository, in the shared git directory: every worktree reads it, and git never tracks it.
 export const CLI_PATH_FILE = 'tdd-governor-cli-path';
@@ -41,7 +46,7 @@ export function installHooks(
 
   for (const { name, command } of hooks) {
     const file = path.join(hooksDir, name);
-    if (existsSync(file) && !readFileSync(file, 'utf8').includes(MARKER)) {
+    if (existsSync(file) && !isOurs(readFileSync(file, 'utf8'))) {
       ok = false;
       messages.push(`refusing to overwrite existing ${name} hook at ${file}; add these lines to it yourself:\n${hookSnippet(command)}`);
       continue;
