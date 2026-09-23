@@ -10,15 +10,23 @@ export const CLI_PATH_FILE = 'tdd-governor-cli-path';
 
 // The hook file may be tracked (core.hooksPath), so it must hold no machine-specific path: it reads one
 // written by install. A clone without the governor gets a notice, not a block — CI still runs `gate ci`.
+// The one place the cli is resolved: $GOVERNOR_CLI, else the pointer install writes in the common git dir.
+const RESOLVE_CLI = `governor_cli="\${GOVERNOR_CLI:-$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/${CLI_PATH_FILE}" 2>/dev/null)}"`;
+
 const hookScript = (command: string) => `#!/bin/sh
 ${MARKER}
-cli="\${GOVERNOR_CLI:-$(cat "$(git rev-parse --path-format=absolute --git-common-dir)/${CLI_PATH_FILE}" 2>/dev/null)}"
-if [ ! -f "$cli" ]; then
+${RESOLVE_CLI}
+if [ ! -f "$governor_cli" ]; then
   echo "governor: not installed on this machine, skipping ${command} (run: governor install)" >&2
   exit 0
 fi
-exec node "$cli" ${command}
+exec node "$governor_cli" ${command}
 `;
+
+// Advice for a hook we may not touch: the same resolution, as lines to paste into a hand-written hook.
+// `if` rather than `&&` so that pasting it last still exits 0 where the governor is not installed.
+const hookSnippet = (command: string) =>
+  `${RESOLVE_CLI}\nif [ -f "$governor_cli" ]; then node "$governor_cli" ${command} || exit 1; fi`;
 
 export function installHooks(
   root: string,
@@ -35,7 +43,7 @@ export function installHooks(
     const file = path.join(hooksDir, name);
     if (existsSync(file) && !readFileSync(file, 'utf8').includes(MARKER)) {
       ok = false;
-      messages.push(`refusing to overwrite existing ${name} hook at ${file}; add this line to it yourself: node "${cliPath}" ${command}`);
+      messages.push(`refusing to overwrite existing ${name} hook at ${file}; add these lines to it yourself:\n${hookSnippet(command)}`);
       continue;
     }
     writeFileSync(file, hookScript(command));

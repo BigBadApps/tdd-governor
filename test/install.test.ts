@@ -1,5 +1,5 @@
-import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -64,5 +64,39 @@ describe('installHooks agent primer', () => {
     writeFileSync(file, 'old text\n');
     installHooks(root, '/x/cli.js', hooks);
     expect(readFileSync(file, 'utf8')).not.toBe('old text\n');
+  });
+});
+
+describe('installHooks refuses a foreign hook', () => {
+  it('refuses to overwrite a foreign hook and suggests a portable snippet, not an absolute cli path', () => {
+    const root = repo();
+    const file = path.join(root, '.git', 'hooks', 'pre-commit');
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, '#!/bin/sh\necho mine\n');
+    const { ok, messages } = installHooks(root, '/x/cli.js', hooks);
+    expect(ok).toBe(false);
+    expect(readFileSync(file, 'utf8')).toBe('#!/bin/sh\necho mine\n');
+    const message = messages.join('\n');
+    expect(message).toContain('refusing to overwrite existing pre-commit hook');
+    expect(message).not.toContain('/x/cli.js');
+    expect(message).toContain('tdd-governor-cli-path');
+    expect(message).toContain('GOVERNOR_CLI');
+    expect(message).toContain('gate commit');
+  });
+
+  it('suggests lines that succeed on a machine without the governor, like the generated hook', () => {
+    const root = repo();
+    const hook = path.join(root, '.git', 'hooks', 'pre-commit');
+    mkdirSync(path.dirname(hook), { recursive: true });
+    writeFileSync(hook, '#!/bin/sh\necho mine\n');
+    const { messages } = installHooks(root, '/x/cli.js', hooks);
+    const snippet = messages[0].split('yourself:\n')[1];
+
+    const other = repo();
+    const handWritten = path.join(other, 'hand-written-hook');
+    writeFileSync(handWritten, `#!/bin/sh\necho mine\n${snippet}\n`);
+    chmodSync(handWritten, 0o755);
+    const run = spawnSync(handWritten, { cwd: other, encoding: 'utf8' });
+    expect(run.status).toBe(0);
   });
 });
