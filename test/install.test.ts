@@ -31,6 +31,53 @@ describe('installHooks writes portable hooks', () => {
   });
 });
 
+describe('installHooks agent primer names the real config file', () => {
+  it('names vite.config.js when that is the only vitest config present', () => {
+    const root = repo();
+    writeFileSync(path.join(root, 'vite.config.js'), 'export default {}\n');
+    const { messages } = installHooks(root, '/x/cli.js', hooks);
+    const text = readFileSync(path.join(root, '.governor', 'PRIMER.md'), 'utf8');
+    expect(text).toContain('vite.config.js');
+    expect(text).not.toContain('vitest.config.ts');
+    expect(messages.join('\n')).not.toMatch(/vitest\.config\.ts/);
+  });
+
+  it('names vitest.config.ts when that is present', () => {
+    const root = repo();
+    writeFileSync(path.join(root, 'vitest.config.ts'), 'export default {}\n');
+    installHooks(root, '/x/cli.js', hooks);
+    const text = readFileSync(path.join(root, '.governor', 'PRIMER.md'), 'utf8');
+    expect(text).toContain('vitest.config.ts');
+  });
+
+  it('prefers a vitest config over a vite config in the same folder', () => {
+    const root = repo();
+    writeFileSync(path.join(root, 'vitest.config.ts'), 'export default {}\n');
+    writeFileSync(path.join(root, 'vite.config.js'), 'export default {}\n');
+    installHooks(root, '/x/cli.js', hooks);
+    const text = readFileSync(path.join(root, '.governor', 'PRIMER.md'), 'utf8');
+    expect(text).toContain('vitest.config.ts');
+    expect(text).not.toContain('vite.config.js');
+  });
+
+  it('looks inside packageRoot, not the repo root, for a monorepo package', () => {
+    const root = repo();
+    mkdirSync(path.join(root, 'frontend'));
+    writeFileSync(path.join(root, 'frontend', 'vite.config.js'), 'export default {}\n');
+    installHooks(root, '/x/cli.js', hooks, 'frontend');
+    const text = readFileSync(path.join(root, '.governor', 'PRIMER.md'), 'utf8');
+    expect(text).toContain('frontend/vite.config.js');
+  });
+
+  it('falls back to generic wording when no vitest config is found', () => {
+    const root = repo();
+    installHooks(root, '/x/cli.js', hooks);
+    const text = readFileSync(path.join(root, '.governor', 'PRIMER.md'), 'utf8');
+    expect(text).toMatch(/vitest\.config|vite\.config/);
+    expect(text).not.toContain('vitest.config.ts` (the governor');
+  });
+});
+
 describe('installHooks agent primer', () => {
   it('writes .governor/PRIMER.md saying what counts as a red and how to get one', () => {
     const root = repo();
@@ -41,7 +88,7 @@ describe('installHooks agent primer', () => {
     expect(text).toMatch(/AssertionError/);
     expect(text).toMatch(/stub/i);
     expect(text).toMatch(/GOVERNOR_OVERRIDE/);
-    expect(text).toMatch(/test\.reporters|vitest\.config/);
+    expect(text).toMatch(/test\.reporters|vitest\.config|vite\.config/);
     expect(text).toMatch(/merge commit is gated only on what the merge itself changes/);
     expect(messages.join('\n')).toMatch(/PRIMER\.md/);
   });
