@@ -5,6 +5,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # Majors need a deliberate upgrade: vitest is a peer dependency, @types/node must match
+      # the supported Node, and zod/typescript majors change types the gates depend on.
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
