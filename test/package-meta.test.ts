@@ -27,4 +27,9 @@ describe('open-source metadata', () => {
       expect(existsSync(path.join(root, file))).toBe(true);
     },
   );
+
+  it('keeps Dependabot off major version bumps of npm packages', () => {
+    const text = readFileSync(path.join(root, '.github/dependabot.yml'), 'utf8');
+    expect(text).toContain('version-update:semver-major');
+  });
 });
