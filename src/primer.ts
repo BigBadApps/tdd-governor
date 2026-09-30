@@ -52,7 +52,7 @@ wastes a cycle.
 When a gate blocks you, these thoughts mean stop and get the missing red instead:
 
 - **"It's too simple to test."** Simple code breaks too, and the gate does not grade difficulty. Write the test.
-- **"I'll add the test after."** A test written after the code passes on its first run, so it has no red and proves nothing. Write the stub first, then the test, then the real code.
+- **"I'll add the test after."** If the code already works, a test written afterward may pass on its first run and leave no recorded red. Write the stub first, then the test, then the real code.
 - **"I tested it manually."** Manual checks leave no ledger line and cannot be repeated. The gate only reads the ledger.
 - **"The test is obviously right."** A test you never saw fail might assert nothing. The red is the proof.
 - **"I'll break the code for a moment to record a red."** That proves the break, not the test. See the workflow above.
