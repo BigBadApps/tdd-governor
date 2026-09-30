@@ -18,6 +18,7 @@ export default defineConfig({
     include: ['test/**/*.test.ts'],
     exclude: ['test/fixtures/**', 'node_modules/**'],
     testTimeout: 60_000,
+    globalSetup: ['./test/global-build.ts'],
     includeTaskLocation: true,
     reporters: reporters as never,
   },

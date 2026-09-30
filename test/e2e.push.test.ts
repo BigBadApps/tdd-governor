@@ -2,14 +2,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, symlinkSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 const governorRoot = path.resolve(__dirname, '..');
 const cli = path.join(governorRoot, 'dist', 'cli.js');
-
-beforeAll(() => {
-  execFileSync('npm', ['run', 'build'], { cwd: governorRoot, stdio: 'pipe' });
-});
 
 describe('governor gate push (e2e)', () => {
   it('blocks a push whose changed line has a surviving mutant', () => {

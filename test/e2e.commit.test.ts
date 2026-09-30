@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 const tmpDirs: string[] = [];
 const governorRoot = path.resolve(__dirname, '..');
@@ -42,10 +42,6 @@ const commit = (root: string, env: Record<string, string> = {}) => {
   return spawnSync('git', ['commit', '-q', '-m', 'change'], { cwd: root, encoding: 'utf8', env: { ...process.env, ...env } });
 };
 const runTests = (root: string) => spawnSync('node', [cli, 'run'], { cwd: root, encoding: 'utf8' });
-
-beforeAll(() => {
-  execFileSync('npm', ['run', 'build'], { cwd: governorRoot, stdio: 'pipe' });
-});
 
 afterAll(() => {
   tmpDirs.forEach((d) => rmSync(d, { recursive: true, force: true }));
