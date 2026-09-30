@@ -103,6 +103,22 @@ describe('installHooks agent primer', () => {
     expect(text).toMatch(/any answer is no or unknown/i);
   });
 
+  it('answers the usual excuses for bypassing a block', () => {
+    const root = repo();
+    installHooks(root, '/x/cli.js', hooks);
+    const text = readFileSync(path.join(root, '.governor', 'PRIMER.md'), 'utf8');
+    expect(text).toMatch(/## Excuses that do not work/);
+    expect(text).toMatch(/too simple to test/i);
+    expect(text).toMatch(/I'll add the test after/i);
+    expect(text).toMatch(/a test written afterward may pass on its first run/i);
+    expect(text).toMatch(/I tested it manually/i);
+    expect(text).toMatch(/The test is obviously right/i);
+    expect(text).toMatch(/I'll break the code for a moment to record a red/i);
+    expect(text).toMatch(/I'll skip or weaken this one test/i);
+    expect(text).toMatch(/Only the governor is wrong/i);
+    expect(text).toMatch(/Just this once/i);
+  });
+
   it('refreshes a stale primer on reinstall', () => {
     const root = repo();
     installHooks(root, '/x/cli.js', hooks);

@@ -47,6 +47,19 @@ wastes a cycle.
 - A \`.skip\`, \`.only\` or \`.todo\` is blocked outright, and deleting assertions is blocked unless you add as many.
 - A merge commit is gated only on what the merge itself changes (conflict resolution); tests the merged branch brought in were gated on that branch.
 
+## Excuses that do not work
+
+When a gate blocks you, these thoughts mean stop and get the missing red instead:
+
+- **"It's too simple to test."** Simple code breaks too, and the gate does not grade difficulty. Write the test.
+- **"I'll add the test after."** If the code already works, a test written afterward may pass on its first run and leave no recorded red. Write the stub first, then the test, then the real code.
+- **"I tested it manually."** Manual checks leave no ledger line and cannot be repeated. The gate only reads the ledger.
+- **"The test is obviously right."** A test you never saw fail might assert nothing. The red is the proof.
+- **"I'll break the code for a moment to record a red."** That proves the break, not the test. See the workflow above.
+- **"I'll skip or weaken this one test."** \`.skip\`, \`.only\`, \`.todo\` and lost assertions are blocked. Fix the test instead.
+- **"Only the governor is wrong."** Sometimes it is, but you decide that with evidence, not by feeling. See the override questions below.
+- **"Just this once."** The override is recorded in the ledger, and CI ignores it.
+
 ## Never bypass
 
 Do not use \`git commit --no-verify\` or \`GOVERNOR_OVERRIDE\`. An override is recorded in the ledger.
