@@ -7,7 +7,6 @@ const template = readFileSync(path.resolve(__dirname, '../templates/governor-ci.
 describe('governor-ci.yml template', () => {
   it.each([
     'fetch-depth: 0',
-    'GOVERNOR_READ_TOKEN: ${{ secrets.GOVERNOR_READ_TOKEN }}',
     'GOVERNOR_HOME: ${{ runner.temp }}/governor',
     'permissions:',
     'contents: read',
@@ -16,6 +15,12 @@ describe('governor-ci.yml template', () => {
     'pull_request',
   ])('contains %s', (needle) => {
     expect(template).toContain(needle);
+  });
+
+  it('clones the public repository without a secret', () => {
+    expect(template).toContain('git clone --quiet https://github.com/BigBadApps/tdd-governor.git');
+    expect(template).not.toContain('GOVERNOR_READ_TOKEN');
+    expect(template).not.toContain('x-access-token');
   });
 
   it('has exactly one GOVERNOR_SHA placeholder in the checkout step', () => {
