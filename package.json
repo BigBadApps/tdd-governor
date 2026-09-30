@@ -33,7 +33,7 @@
     "node": ">=22"
   },
   "bin": {
-    "governor": "./dist/cli.js"
+    "governor": "dist/cli.js"
   },
   "exports": {
     "./vitest-reporter": "./dist/adapters/vitest/reporter.js"

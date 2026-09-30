@@ -53,6 +53,10 @@ describe('npm package', () => {
     expect(extra).toEqual([]);
   });
 
+  it('declares the bin path the way npm publishes it, so `npm publish` has nothing to correct', () => {
+    expect(pkg.bin).toEqual({ governor: 'dist/cli.js' });
+  });
+
   it('builds before packing, so a publish cannot ship a stale dist', () => {
     expect(pkg.scripts.prepack).toBe('npm run build');
   });
