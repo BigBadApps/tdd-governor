@@ -2,7 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it } from 'vitest';
 
 const tmpDirs: string[] = [];
 const governorRoot = path.resolve(__dirname, '..');
@@ -63,10 +63,6 @@ function ci(root: string, args: string[] = ['--base', 'main'], extraEnv: Record<
   if (!('GOVERNOR_OVERRIDE' in extraEnv)) delete env.GOVERNOR_OVERRIDE;
   return spawnSync('node', [cli, 'gate', 'ci', ...args], { cwd: root, encoding: 'utf8', env });
 }
-
-beforeAll(() => {
-  execFileSync('npm', ['run', 'build'], { cwd: governorRoot, stdio: 'pipe' });
-});
 
 afterAll(() => {
   tmpDirs.forEach((d) => rmSync(d, { recursive: true, force: true }));
