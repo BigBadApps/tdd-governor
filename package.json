@@ -1,6 +1,25 @@
 {
   "name": "tdd-governor",
   "version": "0.1.0",
+  "description": "Git-hook gate that blocks commits lacking real TDD evidence: red before green, no skipped tests, optional mutation coverage.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BigBadApps/tdd-governor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BigBadApps/tdd-governor/issues"
+  },
+  "homepage": "https://github.com/BigBadApps/tdd-governor#readme",
+  "keywords": [
+    "tdd",
+    "test-driven-development",
+    "git-hooks",
+    "vitest",
+    "mutation-testing",
+    "ai-coding-agents",
+    "claude-code"
+  ],
   "private": true,
   "type": "module",
   "engines": {
