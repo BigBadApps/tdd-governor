@@ -4,18 +4,13 @@ Git-hook gate that blocks commits and pushes lacking real TDD evidence — a red
 
 It is deterministic: every verdict comes from recorded test runs and the git diff, not from a model's judgement. It works with any agent or human, because it lives in git hooks and CI rather than in an editor.
 
-Requires Node 22+ and git. Vitest is the only implemented test adapter.
+Requires Node 22+ and git. Vitest is the only implemented test adapter. MIT licensed.
 
 ## Install
 
-The package is not on npm yet. Build it from source:
-
 ```bash
-git clone https://github.com/BigBadApps/tdd-governor.git
-cd tdd-governor && npm ci && npm run build
+npm install --save-dev tdd-governor
 ```
-
-Then, in the repo you want to govern:
 
 ### 1. Config
 
@@ -42,7 +37,7 @@ Add `.governor/config.json` at the repo root:
 The governor learns what happened in a test run from a vitest reporter. **`install` does not add it for you.** In your vitest config set both:
 
 ```ts
-import GovernorReporter from '/path/to/tdd-governor/dist/adapters/vitest/reporter.js';
+import GovernorReporter from 'tdd-governor/vitest-reporter';
 
 export default defineConfig({
   test: {
@@ -52,17 +47,17 @@ export default defineConfig({
 });
 ```
 
-Without the reporter, `governor run` reports `GATE_UNAVAILABLE` instead of passing. For a tracked config that must not hold a machine-specific path, read it from the pointer file `install` writes (`tdd-governor-cli-path` in the git directory); this repo's own [vitest.config.ts](vitest.config.ts) loads the built reporter from `dist/`.
+Without the reporter, `governor run` reports `GATE_UNAVAILABLE` instead of passing. Because it is a dev dependency, a fresh `npm ci` brings the reporter with it.
 
 ### 3. Hooks
 
 ```bash
-node /path/to/tdd-governor/dist/cli.js install
+npx governor install
 ```
 
 Installs `pre-commit`, `pre-merge-commit` and `pre-push` hooks, writes `.governor/PRIMER.md`, and adds the ledger to `.gitignore`. It refuses to overwrite a hook it doesn't recognise as its own and prints the lines to add to it yourself.
 
-The hook files hold no machine-specific path, so they are safe to track (for example under `core.hooksPath`). They read the CLI location from a pointer in the shared git directory, so every worktree sees it. A clone without the governor installed prints a notice and skips the hook rather than blocking; CI is the backstop.
+The hook files hold no machine-specific path, so they are safe to track (for example under `core.hooksPath`). They read the CLI location from a pointer in the shared git directory (`tdd-governor-cli-path`), so every worktree sees it. A clone without the governor installed prints a notice and skips the hook rather than blocking; CI is the backstop.
 
 ## Usage
 
@@ -124,7 +119,8 @@ Two limits to know about:
 ## Development
 
 ```bash
-npm ci
-npm run build
-npm test
+git clone https://github.com/BigBadApps/tdd-governor.git
+cd tdd-governor && npm ci && npm run build && npm test
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). This repo's own [vitest.config.ts](vitest.config.ts) loads the freshly built reporter from `dist/`.
