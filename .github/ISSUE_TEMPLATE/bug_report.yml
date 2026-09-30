@@ -1,0 +1,23 @@
+name: Bug report
+description: A gate blocked, passed, or crashed when it should not have
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Paste the governor's output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Governor commit or version, Node version, OS
+    validations:
+      required: true
