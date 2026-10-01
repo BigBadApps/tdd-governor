@@ -15,6 +15,7 @@ import { redBeforeGreen } from './gates/red-before-green.js';
 import { changedLines, ciBase, commitDiff, evidenceSince, pushBase, pushDiff, repoRoot, stagedFile } from './git.js';
 import { installHooks, PRIMER_FILE } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
+import { runMutmut } from './mutation/mutmut.js';
 import { runStryker } from './mutation/stryker.js';
 import { findVitestConfig, reporterWarning } from './primer.js';
 import { decide, formatResults } from './report.js';
@@ -122,7 +123,7 @@ function mutationGate(root: string, config: GovernorConfig, diff: FileDiff[]): G
   const pkg = packageOf(root, config);
   const run = config.adapter === 'vitest'
     ? runStryker(pkg.dir, [...changed.keys()].map(pkg.toPackage), config.mutation.timeoutMs)
-    : { ok: false as const, error: `mutation for adapter '${config.adapter}' is not implemented yet` };
+    : runMutmut(pkg.dir, config.pytest!.python, [...changed.keys()].map(pkg.toPackage), config.mutation.timeoutMs);
   return run.ok
     ? mutation({ mutants: run.mutants.map((m) => ({ ...m, file: pkg.toRepo(m.file) })), changed })
     : { gate: 'mutation', status: 'GATE_UNAVAILABLE', findings: [{ file: '(mutation)', message: run.error }] };
