@@ -55,9 +55,10 @@ export function runMutmut(
   const run = spawnSync(mutmut, ['run', ...globs], { cwd: root, env, stdio: 'inherit', timeout: timeoutMs });
   if (run.error) return { ok: false, error: `mutmut did not run: ${run.error.message}` };
   if (run.signal) return { ok: false, error: `mutmut killed by ${run.signal}` };
-  const results = spawnSync(mutmut, ['results', '--all', 'true'], { cwd: root, env, encoding: 'utf8' });
-  if (results.status !== 0) return { ok: false, error: `mutmut results failed: ${results.stderr}` };
-  const show = (name: string) => spawnSync(mutmut, ['show', name], { cwd: root, env, encoding: 'utf8' }).stdout ?? '';
+  const results = spawnSync(mutmut, ['results', '--all', 'true'], { cwd: root, env, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 });
+  if (results.status !== 0) return { ok: false, error: `mutmut results failed: ${results.stderr || results.error?.message || 'non-zero exit'}` };
+  const show = (name: string) => spawnSync(mutmut, ['show', name], { cwd: root, env, encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }).stdout ?? '';
+
   const mutants = parseMutmut(results.stdout, show);
   if (mutants.length === 0) return { ok: false, error: 'mutmut produced no mutants for the changed files' };
   return { ok: true, mutants };

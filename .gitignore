@@ -11,3 +11,4 @@ docs/superpowers/handoffs/
 __pycache__/
 .pytest_cache/
 mutants/
+*.egg-info/
