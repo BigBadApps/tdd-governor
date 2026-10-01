@@ -20,8 +20,14 @@ export const ConfigSchema = z
     sourceGlobs: z.array(z.string().min(1)).min(1),
     mutation: z.object({ enabled: z.boolean(), timeoutMs: z.number().int().positive() }),
     runTimeoutMs: z.number().int().positive(),
+    pytest: z.object({ python: z.string().min(1) }).strict().optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((c, ctx) => {
+    if (c.adapter === 'pytest' && !c.pytest) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['pytest', 'python'], message: 'required when adapter is pytest' });
+    }
+  });
 
 export type GovernorConfig = z.infer<typeof ConfigSchema>;
 
