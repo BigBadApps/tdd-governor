@@ -12,7 +12,7 @@ export function runPytest(root: string, python: string, timeoutMs: number, extra
   return runAndCollect({
     root,
     command: path.resolve(root, python),
-    args: ['-m', 'pytest', '-p', 'tdd_governor_pytest', '--continue-on-collection-errors', ...ignores, ...extraArgs],
+    args: ['-m', 'pytest', '-p', 'tdd_governor_pytest', '--continue-on-collection-errors', '--ignore=mutants', ...ignores, ...extraArgs],
     env: { PYTHONPATH: [PLUGIN_DIR, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter) },
     timeoutMs,
     label: 'pytest',

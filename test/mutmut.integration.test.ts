@@ -22,6 +22,25 @@ describe('parseMutmut (captured output)', () => {
     expect(survivors.every((m) => m.file === 'src/clamp.py')).toBe(true);
     expect(survivors.some((m) => m.startLine === 4)).toBe(true); // `if x > hi:` has no test
   });
+
+  it('resolves function offsets when diff line numbers are function-relative', () => {
+    const results = '    backend.scoring.x_score_exposure__mutmut_71: survived\n';
+    const diff = [
+      '# backend.scoring.x_score_exposure__mutmut_71: survived',
+      '--- backend/scoring.py',
+      '+++ backend/scoring.py',
+      '@@ -18,7 +18,7 @@',
+      '     if mean == 999.0:',
+      '-        exposure_score = 0.5',
+      '+        exposure_score = 1.5',
+    ].join('\n');
+    const offsets = { 'backend/scoring.py': { score_exposure: 210 } };
+    const mutants = parseMutmut(results, () => diff, offsets);
+    expect(mutants).toHaveLength(1);
+    expect(mutants[0]?.file).toBe('backend/scoring.py');
+    expect(mutants[0]?.startLine).toBe(228);
+    expect(mutants[0]?.status).toBe('survived');
+  });
 });
 
 describe('runMutmut (real mutmut)', () => {
