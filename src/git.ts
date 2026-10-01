@@ -24,6 +24,15 @@ export function stagedFile(root: string, file: string): string | undefined {
   }
 }
 
+// HEAD content of `file` (what a CI run's line numbers refer to); undefined if absent.
+export function headFile(root: string, file: string): string | undefined {
+  try {
+    return git(root, ['show', `HEAD:${file}`]);
+  } catch {
+    return undefined;
+  }
+}
+
 // Linked worktrees checked out inside `root`, as root-relative posix paths.
 export function nestedWorktrees(root: string): string[] {
   const real = realpathSync(root);

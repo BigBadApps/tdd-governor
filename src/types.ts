@@ -28,7 +28,7 @@ export interface LedgerRecord {
 
 export type GateStatus = 'PASS' | 'BLOCK' | 'UNDECIDED' | 'GATE_UNAVAILABLE';
 
-export type GateName = 'red-before-green' | 'diff-audit' | 'green' | 'mutation';
+export type GateName = 'red-before-green' | 'red-at-base' | 'diff-audit' | 'green' | 'mutation';
 
 export interface Finding {
   file: string;

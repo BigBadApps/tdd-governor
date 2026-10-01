@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { FileDiff } from '../../src/diff.js';
-import { redBeforeGreen } from '../../src/gates/red-before-green.js';
+import { redBeforeGreen, scopeOf } from '../../src/gates/red-before-green.js';
 import type { LedgerRecord, TestResult } from '../../src/types.js';
 
 const F = 'tests/math.test.ts';
@@ -209,3 +209,22 @@ describe('redBeforeGreen', () => {
     expect(redBeforeGreen({ diff, isTestFile, records: [], sinceIso: SINCE }).status).toBe('PASS');
   });
 });
+
+describe('scopeOf', () => {
+  const t = (id: string, line?: number): TestResult => ({ id: `t.test.ts > ${id}`, file: 't.test.ts', status: 'pass', ...(line !== undefined && { line }) });
+  const diff = (status: FileDiff['status'], lines: number[]): FileDiff => ({ path: 't.test.ts', status, added: lines.map((line) => ({ line, text: 'x' })), removed: [] });
+  const source = "it('a', () => {\n  expect(1).toBe(1);\n});\n\nit('b', () => {\n  expect(2).toBe(2);\n});\n";
+
+  it('takes every test of an added file', () => {
+    expect(scopeOf(diff('added', [1]), [t('a', 1), t('b', 5)], source)?.map((x) => x.id)).toEqual(['t.test.ts > a', 't.test.ts > b']);
+  });
+
+  it('takes only the tests whose span holds an added line', () => {
+    expect(scopeOf(diff('modified', [6]), [t('a', 1), t('b', 5)], source)?.map((x) => x.id)).toEqual(['t.test.ts > b']);
+  });
+
+  it('is undefined when a test has no line', () => {
+    expect(scopeOf(diff('modified', [6]), [t('a'), t('b', 5)], source)).toBeUndefined();
+  });
+});
+

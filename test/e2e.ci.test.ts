@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -69,14 +69,15 @@ afterAll(() => {
 });
 
 describe('governor gate ci (e2e)', () => {
-  it('blocks an added .skip and prints the skipped red-before-green line', () => {
+  it('blocks an added .skip', () => {
     const root = makeRepo('plain');
     writeFileSync(path.join(root, 'tests/add.test.ts'), `${TEST_FILE}\n${SKIP_LINE}\n`);
     commit(root);
     const res = ci(root);
     expect(res.status).toBe(1);
     expect(res.stdout).toMatch(/\[BLOCK\] diff-audit/);
-    expect(res.stdout).toContain('red-before-green: skipped in CI (needs local ledger, G3)');
+    expect(res.stdout).not.toContain('red-before-green: skipped in CI');
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base[\s\S]*warning: no source files changed/);
   });
 
   it('passes a clean diff', () => {
@@ -114,6 +115,49 @@ describe('governor gate ci (e2e)', () => {
     expect(res.stderr).toMatch(/usage: governor gate ci/);
   });
 
+  it('passes a test that fails on an assertion at base', () => {
+    const root = makeRepo('plain');
+    writeFileSync(path.join(root, 'src/add.ts'), 'export const add = (a: number, b: number, c = 0): number => a + b + c;\n');
+    writeFileSync(path.join(root, 'tests/add.test.ts'), `${TEST_FILE}\nit('adds three', () => {\n  expect(add(1, 2, 3)).toBe(6);\n});\n`);
+    commit(root);
+    const res = ci(root);
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base/);
+    expect(res.stdout).not.toMatch(/warning: .*adds three/);
+    expect(res.status).toBe(0);
+  });
+
+  it('passes a test of a new module with a weak-red warning', () => {
+    const root = makeRepo('plain');
+    writeFileSync(path.join(root, 'src/sub.ts'), 'export const sub = (a: number, b: number): number => a - b;\n');
+    writeFileSync(path.join(root, 'tests/sub.test.ts'), "import { expect, it } from 'vitest';\nimport { sub } from '../src/sub.js';\n\nit('subtracts', () => {\n  expect(sub(3, 1)).toBe(2);\n});\n");
+    commit(root);
+    const res = ci(root);
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base[\s\S]*warning: .*subtracts/);
+    expect(res.status).toBe(0);
+  });
+
+  it('blocks a test that passes without the PR source changes', () => {
+    const root = makeRepo('plain');
+    writeFileSync(path.join(root, 'src/other.ts'), 'export const other = 1;\n');
+    writeFileSync(path.join(root, 'tests/add.test.ts'), `${TEST_FILE}\nit('adds twos', () => {\n  expect(add(2, 2)).toBe(4);\n});\n`);
+    commit(root);
+    const res = ci(root);
+    expect(res.status).toBe(1);
+    expect(res.stdout).toMatch(/\[BLOCK\] red-at-base[\s\S]*adds twos: passes with this PR's source changes reverted/);
+  });
+
+  it('leaves the checkout and worktree list untouched', () => {
+    const root = makeRepo('plain');
+    writeFileSync(path.join(root, 'src/add.ts'), 'export const add = (a: number, b: number, c = 0): number => a + b + c;\n');
+    writeFileSync(path.join(root, 'tests/add.test.ts'), `${TEST_FILE}\nit('adds three', () => {\n  expect(add(1, 2, 3)).toBe(6);\n});\n`);
+    commit(root);
+    const res = ci(root);
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base/);
+    const g = (...a: string[]) => execFileSync('git', a, { cwd: root, encoding: 'utf8' });
+    expect(g('status', '--porcelain')).toBe('');
+    expect(g('worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1);
+  });
+
   it('blocks a surviving mutant on a changed line', () => {
     const root = makeRepo('mutation');
     cpSync(path.resolve(__dirname, 'fixtures/mutation-project/src/clamp.ts'), path.join(root, 'src/clamp.ts'));
@@ -123,4 +167,94 @@ describe('governor gate ci (e2e)', () => {
     expect(res.stdout).toMatch(/\[PASS\] green/);
     expect(res.stdout).toMatch(/\[BLOCK\] mutation[\s\S]*src\/clamp\.ts:3/);
   }, 300_000);
+
+  it('passes when an app test imports a changed workspace package through its node_modules symlink', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'gov-ci-ws-'));
+    tmpDirs.push(root);
+    const g = (...a: string[]) => execFileSync('git', a, { cwd: root, stdio: 'pipe' });
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 'e2e@example.com');
+    g('config', 'user.name', 'e2e');
+    mkdirSync(path.join(root, '.governor'), { recursive: true });
+    writeFileSync(path.join(root, '.governor/config.json'), JSON.stringify({
+      adapter: 'vitest',
+      testGlobs: ['packages/**/tests/**/*.test.ts'],
+      sourceGlobs: ['packages/**/src/**/*.ts'],
+      mutation: { enabled: false, timeoutMs: 300000 },
+      runTimeoutMs: 120000,
+    }));
+    writeFileSync(path.join(root, 'vitest.config.ts'), [
+      "import { defineConfig } from 'vitest/config';",
+      `import GovernorReporter from ${reporter};`,
+      `export default defineConfig({ test: { include: ['packages/**/tests/**/*.test.ts'], includeTaskLocation: true, reporters: ['default', new GovernorReporter()] } });`,
+    ].join('\n'));
+    writeFileSync(path.join(root, '.gitignore'), 'node_modules\n.governor/ledger.jsonl\n');
+    mkdirSync(path.join(root, 'packages/lib/src'), { recursive: true });
+    mkdirSync(path.join(root, 'packages/app/tests'), { recursive: true });
+    mkdirSync(path.join(root, 'node_modules/@acme'), { recursive: true });
+    symlinkSync('../../packages/lib', path.join(root, 'node_modules/@acme/lib'));
+    for (const ent of ['vitest', '@vitest', 'vite', 'esbuild', '.bin']) {
+      const src = path.join(governorRoot, 'node_modules', ent);
+      if (existsSync(src)) symlinkSync(src, path.join(root, 'node_modules', ent));
+    }
+    writeFileSync(path.join(root, 'packages/lib/package.json'), JSON.stringify({ name: '@acme/lib', main: './src/index.ts' }));
+    writeFileSync(path.join(root, 'packages/lib/src/index.ts'), 'export const val = 1;\n');
+    writeFileSync(path.join(root, 'packages/app/package.json'), JSON.stringify({ name: '@acme/app', dependencies: { '@acme/lib': '*' } }));
+    writeFileSync(path.join(root, 'packages/app/tests/app.test.ts'), [
+      "import { expect, it } from 'vitest';",
+      "import { val } from '@acme/lib';",
+      "it('checks val', () => {",
+      "  expect(val).toBe(1);",
+      "});",
+    ].join('\n'));
+    g('add', '-A');
+    g('commit', '-q', '-m', 'base');
+    g('checkout', '-q', '-b', 'feature');
+    writeFileSync(path.join(root, 'packages/lib/src/index.ts'), 'export const val = 2;\n');
+    writeFileSync(path.join(root, 'packages/app/tests/app.test.ts'), [
+      "import { expect, it } from 'vitest';",
+      "import { val } from '@acme/lib';",
+      "it('checks val', () => {",
+      "  expect(val).toBe(2);",
+      "});",
+    ].join('\n'));
+    commit(root);
+    const res = ci(root);
+    expect(res.status).toBe(0);
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base/);
+  });
+
+  it('passes a pytest PR when package is imported via simulated editable install', () => {
+    const python = process.env.GOVERNOR_TEST_PYTHON ?? path.join(governorRoot, '.venv-py/bin/python');
+    expect(existsSync(python), `python env missing at ${python}`).toBe(true);
+    const root = mkdtempSync(path.join(tmpdir(), 'gov-ci-py-'));
+    tmpDirs.push(root);
+    const g = (...a: string[]) => execFileSync('git', a, { cwd: root, stdio: 'pipe' });
+    g('init', '-q', '-b', 'main');
+    g('config', 'user.email', 'e2e@example.com');
+    g('config', 'user.name', 'e2e');
+    mkdirSync(path.join(root, '.governor'), { recursive: true });
+    writeFileSync(path.join(root, '.governor/config.json'), JSON.stringify({
+      adapter: 'pytest',
+      pytest: { python },
+      testGlobs: ['tests/**/test_*.py'],
+      sourceGlobs: ['src/**/*.py'],
+      mutation: { enabled: false, timeoutMs: 300000 },
+      runTimeoutMs: 120000,
+    }));
+    writeFileSync(path.join(root, '.gitignore'), '.venv-py\n.governor/ledger.jsonl\n');
+    mkdirSync(path.join(root, 'src/mypkg'), { recursive: true });
+    mkdirSync(path.join(root, 'tests'), { recursive: true });
+    writeFileSync(path.join(root, 'src/mypkg/__init__.py'), 'VAL = 1\n');
+    writeFileSync(path.join(root, 'tests/test_val.py'), 'from mypkg import VAL\ndef test_val():\n    assert VAL == 1\n');
+    g('add', '-A');
+    g('commit', '-q', '-m', 'base');
+    g('checkout', '-q', '-b', 'feature');
+    writeFileSync(path.join(root, 'src/mypkg/__init__.py'), 'VAL = 2\n');
+    writeFileSync(path.join(root, 'tests/test_val.py'), 'from mypkg import VAL\ndef test_val():\n    assert VAL == 2\n');
+    commit(root);
+    const res = ci(root, ['--base', 'main'], { PYTHONPATH: path.join(root, 'src') });
+    expect(res.status).toBe(0);
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base/);
+  });
 });

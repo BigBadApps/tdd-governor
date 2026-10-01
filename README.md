@@ -81,6 +81,7 @@ Every test run through the reporter appends a record to `.governor/ledger.jsonl`
 |---|---|---|
 | **green** | commit, ci | Latest recorded run has no failing tests, no collection errors, exit code 0. |
 | **red-before-green** | commit | Every test added or changed in the diff has a failing run recorded in the ledger before its current passing one. |
+| **red-at-base** | ci | Every test added or changed in the PR fails once the PR's source changes are reverted (run in a throwaway worktree). Passing at base blocks; an import or runtime failure at base passes with a warning (expected for tests of new code). Tests-only PRs are exempt. |
 | **diff-audit** | commit, ci | Blocks new `.skip`/`.only`/`.todo`/`xit`/`pytest.mark.skip` etc., deleted test files, and diffs that remove assertions or lower an `expect.assertions(n)` count. Warns on changed snapshots. |
 | **mutation** | push, ci (if `mutation.enabled`) | Runs Stryker on changed source lines; flags mutants that survived or aren't covered by any test. |
 
@@ -111,7 +112,8 @@ Records the override (gate and reason) to the ledger instead of blocking. An emp
 
 Two limits to know about:
 
-- `red-before-green` is skipped in CI because it needs the local ledger. The hooks are the only place it runs.
+- CI does not read the local ledger. It re-derives red evidence with `red-at-base` instead, which no local process can forge.
+- In the throwaway base worktree, workspace dependencies and Python package paths are re-routed to the worktree's reverted source so tests do not inadvertently import HEAD code from the checkout.
 - This repo's own [ci workflow](.github/workflows/ci.yml) gates itself with the build from the PR.
 
 ## Primer
