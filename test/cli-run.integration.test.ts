@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runVitest } from '../src/adapters/vitest/run.js';
+import { readLedger } from '../src/ledger.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const fixture = path.resolve(__dirname, 'fixtures/sample-project');
@@ -34,10 +35,34 @@ describe('runVitest', () => {
     }
   });
 
-  it('is unavailable when the reporter is not configured', () => {
+  it('records a run when the vitest config does not load the reporter', () => {
     process.env.GOVERNOR_LEDGER_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'gov-nr-')), 'l.jsonl');
     const outcome = runVitest(path.resolve(__dirname, 'fixtures/no-reporter'), 60_000);
-    expect(outcome).toEqual({ kind: 'unavailable', reason: expect.stringMatching(/reporter/) });
+    expect(outcome.kind).toBe('completed');
+    if (outcome.kind === 'completed') {
+      expect(outcome.record.tests).toHaveLength(1);
+      expect(outcome.record.tests[0]!.line).toBe(3); // includeTaskLocation was injected too
+    }
+  });
+
+  it('writes exactly one record when the config also loads the reporter', () => {
+    const ledger = path.join(mkdtempSync(path.join(tmpdir(), 'gov-dup-')), 'l.jsonl');
+    process.env.GOVERNOR_LEDGER_PATH = ledger;
+    const outcome = runVitest(fixture, 60_000);
+    expect(outcome.kind).toBe('completed');
+    if (outcome.kind !== 'completed') return;
+    expect(readLedger(ledger).records.filter((r) => r.runId === outcome.record.runId)).toHaveLength(1);
+  });
+
+  it('is unavailable when the reporter writes nothing', () => {
+    process.env.GOVERNOR_LEDGER_PATH = path.join(mkdtempSync(path.join(tmpdir(), 'gov-off-')), 'l.jsonl');
+    process.env.GOVERNOR_DISABLE_REPORTER = '1';
+    try {
+      const outcome = runVitest(path.resolve(__dirname, 'fixtures/no-reporter'), 60_000);
+      expect(outcome).toEqual({ kind: 'unavailable', reason: expect.stringMatching(/no ledger record/) });
+    } finally {
+      delete process.env.GOVERNOR_DISABLE_REPORTER;
+    }
   });
 
   it('is unavailable on timeout', () => {
