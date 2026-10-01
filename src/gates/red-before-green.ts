@@ -46,6 +46,14 @@ function testsTouched(tests: TestResult[], addedLines: number[], source: string 
   return sorted.filter((t) => ids.has(t.id));
 }
 
+// Tests a diffed test file puts in scope: all of them for a new file, otherwise those whose span holds an added line.
+// undefined when the run recorded no line locations, so which tests were touched cannot be told.
+export function scopeOf(f: FileDiff, tests: TestResult[], source: string | undefined): TestResult[] | undefined {
+  if (f.status === 'added') return tests;
+  if (tests.some((t) => t.line === undefined)) return undefined;
+  return testsTouched(tests, f.added.map((a) => a.line), source);
+}
+
 export function redBeforeGreen(input: {
   diff: FileDiff[];
   isTestFile: (path: string) => boolean;
@@ -74,15 +82,11 @@ export function redBeforeGreen(input: {
       continue;
     }
 
-    let inScope: TestResult[];
-    if (f.status === 'added') {
-      inScope = tests;
-    } else if (tests.some((t) => t.line === undefined)) {
+    const inScope = scopeOf(f, tests, input.source?.(f.path));
+    if (!inScope) {
       undecided = true;
       findings.push({ file: f.path, message: 'tests have no line locations: set includeTaskLocation: true in the test config' });
       continue;
-    } else {
-      inScope = testsTouched(tests, f.added.map((a) => a.line), input.source?.(f.path));
     }
 
     for (const test of inScope) {
