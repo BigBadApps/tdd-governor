@@ -7,3 +7,8 @@ reports/
 .superpowers/
 .worktrees/
 docs/superpowers/handoffs/
+.venv-py/
+__pycache__/
+.pytest_cache/
+mutants/
+*.egg-info/

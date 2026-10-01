@@ -81,3 +81,16 @@ describe('loadConfig', () => {
     expect(loadConfig(repoWith(JSON.stringify({ ...valid, adapter: 'jest' }))).ok).toBe(false);
   });
 });
+
+describe('loadConfig pytest', () => {
+  it('requires pytest.python for the pytest adapter', () => {
+    const result = loadConfig(repoWith(JSON.stringify({ ...valid, adapter: 'pytest' })));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/pytest\.python/);
+  });
+
+  it('accepts a pytest config with a python path', () => {
+    const cfg = { ...valid, adapter: 'pytest', pytest: { python: '.venv/bin/python' } };
+    expect(loadConfig(repoWith(JSON.stringify(cfg)))).toEqual({ ok: true, config: cfg });
+  });
+});

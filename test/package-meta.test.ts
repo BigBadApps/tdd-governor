@@ -46,11 +46,20 @@ describe('npm package', () => {
   });
 
   it('ships the built cli, reporter, template, license and readme, and nothing else', () => {
-    for (const f of ['dist/cli.js', 'dist/adapters/vitest/reporter.js', 'templates/governor-ci.yml', 'LICENSE', 'README.md']) {
+    for (const f of [
+      'dist/cli.js',
+      'dist/adapters/vitest/reporter.js',
+      'templates/governor-ci.yml',
+      'python/tdd_governor_pytest.py',
+      'python/pyproject.toml',
+      'LICENSE',
+      'README.md',
+    ]) {
       expect(packed).toContain(f);
     }
-    const extra = packed.filter((f) => !/^(dist\/|templates\/|LICENSE$|README\.md$|package\.json$)/.test(f));
+    const extra = packed.filter((f) => !/^(dist\/|templates\/|python\/|LICENSE$|README\.md$|package\.json$)/.test(f));
     expect(extra).toEqual([]);
+    expect(packed.some((f) => f.includes('__pycache__'))).toBe(false);
   });
 
   it('declares the bin path the way npm publishes it, so `npm publish` has nothing to correct', () => {

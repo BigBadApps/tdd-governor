@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tdd-governor-pytest"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = ["pytest>=8"]
+
+[tool.setuptools]
+py-modules = ["tdd_governor_pytest"]
