@@ -226,7 +226,7 @@ describe('governor gate ci (e2e)', () => {
 
   it('passes a pytest PR when package is imported via simulated editable install', () => {
     const python = process.env.GOVERNOR_TEST_PYTHON ?? path.join(governorRoot, '.venv-py/bin/python');
-    if (!existsSync(python)) return;
+    expect(existsSync(python), `python env missing at ${python}`).toBe(true);
     const root = mkdtempSync(path.join(tmpdir(), 'gov-ci-py-'));
     tmpDirs.push(root);
     const g = (...a: string[]) => execFileSync('git', a, { cwd: root, stdio: 'pipe' });

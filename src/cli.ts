@@ -170,7 +170,13 @@ function redAtBaseGate(root: string, config: GovernorConfig, base: string, diff:
   // The worktree has no venv: point pytest at the checkout's interpreter.
   const baseConfig: GovernorConfig = config.pytest ? { ...config, pytest: { python: path.resolve(pkg.dir, config.pytest.python) } } : config;
   const files = [...new Set(scoped.map((t) => pkg.toPackage(t.file)))];
-  const links = [...new Set(['node_modules', path.posix.join(pkg.rel, 'node_modules')])];
+  const links = [
+    ...new Set([
+      'node_modules',
+      path.posix.join(pkg.rel, 'node_modules'),
+      ...(existsSync(path.join(root, '.venv-py')) ? ['.venv-py'] : []),
+    ]),
+  ];
   let outcome: RunOutcome;
   try {
     outcome = withBaseWorktree(root, base, sources, links, (wt) => {
