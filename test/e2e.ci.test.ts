@@ -69,14 +69,15 @@ afterAll(() => {
 });
 
 describe('governor gate ci (e2e)', () => {
-  it('blocks an added .skip and prints the skipped red-before-green line', () => {
+  it('blocks an added .skip', () => {
     const root = makeRepo('plain');
     writeFileSync(path.join(root, 'tests/add.test.ts'), `${TEST_FILE}\n${SKIP_LINE}\n`);
     commit(root);
     const res = ci(root);
     expect(res.status).toBe(1);
     expect(res.stdout).toMatch(/\[BLOCK\] diff-audit/);
-    expect(res.stdout).toContain('red-before-green: skipped in CI (needs local ledger, G3)');
+    expect(res.stdout).not.toContain('red-before-green: skipped in CI');
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base[\s\S]*warning: no source files changed/);
   });
 
   it('passes a clean diff', () => {
@@ -112,6 +113,48 @@ describe('governor gate ci (e2e)', () => {
     const res = ci(root, ['--base']);
     expect(res.status).toBe(2);
     expect(res.stderr).toMatch(/usage: governor gate ci/);
+  });
+
+  it('passes a test that fails on an assertion at base', () => {
+    const root = makeRepo('plain');
+    writeFileSync(path.join(root, 'src/add.ts'), 'export const add = (a: number, b: number, c = 0): number => a + b + c;\n');
+    writeFileSync(path.join(root, 'tests/add.test.ts'), `${TEST_FILE}\nit('adds three', () => {\n  expect(add(1, 2, 3)).toBe(6);\n});\n`);
+    commit(root);
+    const res = ci(root);
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base/);
+    expect(res.stdout).not.toMatch(/warning: .*adds three/);
+    expect(res.status).toBe(0);
+  });
+
+  it('passes a test of a new module with a weak-red warning', () => {
+    const root = makeRepo('plain');
+    writeFileSync(path.join(root, 'src/sub.ts'), 'export const sub = (a: number, b: number): number => a - b;\n');
+    writeFileSync(path.join(root, 'tests/sub.test.ts'), "import { expect, it } from 'vitest';\nimport { sub } from '../src/sub.js';\n\nit('subtracts', () => {\n  expect(sub(3, 1)).toBe(2);\n});\n");
+    commit(root);
+    const res = ci(root);
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base[\s\S]*warning: .*subtracts/);
+    expect(res.status).toBe(0);
+  });
+
+  it('blocks a test that passes without the PR source changes', () => {
+    const root = makeRepo('plain');
+    writeFileSync(path.join(root, 'src/other.ts'), 'export const other = 1;\n');
+    writeFileSync(path.join(root, 'tests/add.test.ts'), `${TEST_FILE}\nit('adds twos', () => {\n  expect(add(2, 2)).toBe(4);\n});\n`);
+    commit(root);
+    const res = ci(root);
+    expect(res.status).toBe(1);
+    expect(res.stdout).toMatch(/\[BLOCK\] red-at-base[\s\S]*adds twos: passes with this PR's source changes reverted/);
+  });
+
+  it('leaves the checkout and worktree list untouched', () => {
+    const root = makeRepo('plain');
+    writeFileSync(path.join(root, 'src/add.ts'), 'export const add = (a: number, b: number, c = 0): number => a + b + c;\n');
+    writeFileSync(path.join(root, 'tests/add.test.ts'), `${TEST_FILE}\nit('adds three', () => {\n  expect(add(1, 2, 3)).toBe(6);\n});\n`);
+    commit(root);
+    ci(root);
+    const g = (...a: string[]) => execFileSync('git', a, { cwd: root, encoding: 'utf8' });
+    expect(g('status', '--porcelain')).toBe('');
+    expect(g('worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1);
   });
 
   it('blocks a surviving mutant on a changed line', () => {

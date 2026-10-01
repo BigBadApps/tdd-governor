@@ -6,13 +6,15 @@ import { fileURLToPath } from 'node:url';
 import picomatch from 'picomatch';
 import { runPytest } from './adapters/pytest/run.js';
 import { runVitest } from './adapters/vitest/run.js';
+import { withBaseWorktree } from './base-worktree.js';
 import { loadConfig, packageOf, type GovernorConfig } from './config.js';
 import type { FileDiff } from './diff.js';
 import { diffAudit } from './gates/diff-audit.js';
 import { green } from './gates/green.js';
 import { mutation } from './gates/mutation.js';
-import { redBeforeGreen } from './gates/red-before-green.js';
-import { changedLines, ciBase, commitDiff, evidenceSince, pushBase, pushDiff, repoRoot, stagedFile } from './git.js';
+import { redAtBase } from './gates/red-at-base.js';
+import { redBeforeGreen, scopeOf } from './gates/red-before-green.js';
+import { changedLines, ciBase, commitDiff, evidenceSince, headFile, pushBase, pushDiff, repoRoot, stagedFile } from './git.js';
 import { installHooks, PRIMER_FILE } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
 import { runMutmut } from './mutation/mutmut.js';
@@ -147,6 +149,37 @@ function gatePush(root: string): number {
   return finish(root, config, [mutationGate(root, config, pushDiff(root, base))], process.env.GOVERNOR_OVERRIDE);
 }
 
+// G3 in CI: every added/changed test must fail once the PR's source changes are reverted. Evidence comes from a
+// run in a throwaway worktree, never from the ledger, which any local process can append to.
+function redAtBaseGate(root: string, config: GovernorConfig, base: string, diff: FileDiff[], head: RunOutcome): GateResult {
+  const isTest = picomatch(config.testGlobs);
+  const isSource = picomatch(config.sourceGlobs);
+  const sources = diff.filter((f) => isSource(f.path) && !isTest(f.path));
+  const testDiffs = diff.filter((f) => isTest(f.path) && f.status !== 'deleted' && f.added.length > 0);
+  if (testDiffs.length > 0 && head.kind === 'unavailable') {
+    return { gate: 'red-at-base', status: 'GATE_UNAVAILABLE', findings: [{ file: '(runner)', message: `head run unavailable: ${head.reason}` }] };
+  }
+  const headTests = head.kind === 'completed' ? head.record.tests : [];
+  const scoped = testDiffs.flatMap((f) => {
+    const tests = headTests.filter((t) => t.file === f.path);
+    return scopeOf(f, tests, headFile(root, f.path)) ?? tests; // no locations: every test in the file is in scope
+  });
+  if (scoped.length === 0 || sources.length === 0) return redAtBase({ scoped, sourceChanged: sources.length > 0, base: head });
+
+  const pkg = packageOf(root, config);
+  // The worktree has no venv: point pytest at the checkout's interpreter.
+  const baseConfig: GovernorConfig = config.pytest ? { ...config, pytest: { python: path.resolve(pkg.dir, config.pytest.python) } } : config;
+  const files = [...new Set(scoped.map((t) => pkg.toPackage(t.file)))];
+  const links = [...new Set(['node_modules', path.posix.join(pkg.rel, 'node_modules')])];
+  let outcome: RunOutcome;
+  try {
+    outcome = withBaseWorktree(root, base, sources, links, (wt) => runTests(baseConfig, wt, files));
+  } catch (e) {
+    outcome = { kind: 'unavailable', reason: `could not prepare the base worktree: ${(e as Error).message}` };
+  }
+  return redAtBase({ scoped, sourceChanged: true, base: outcome });
+}
+
 function gateCi(root: string, baseFlag: string | undefined): number {
   const loaded = loadConfig(root);
   if (!loaded.ok) {
@@ -154,18 +187,21 @@ function gateCi(root: string, baseFlag: string | undefined): number {
     return 1;
   }
   const { config } = loaded;
+  let base: string;
   let diff: FileDiff[];
   try {
-    diff = pushDiff(root, ciBase(root, baseFlag));
+    base = ciBase(root, baseFlag);
+    diff = pushDiff(root, base);
   } catch (e) {
     console.error(`governor: ${(e as Error).message}`);
     return 2;
   }
   if (process.env.GOVERNOR_OVERRIDE !== undefined) console.log('governor: GOVERNOR_OVERRIDE is ignored in CI');
-  console.log('red-before-green: skipped in CI (needs local ledger, G3)');
   const isTestFile = picomatch(config.testGlobs);
+  const head = runTests(config, root);
   const results = [
-    green(runTests(config, root)),
+    green(head),
+    redAtBaseGate(root, config, base, diff, head),
     diffAudit({ diff, isTestFile }),
     config.mutation.enabled ? mutationGate(root, config, diff) : MUTATION_DISABLED,
   ];

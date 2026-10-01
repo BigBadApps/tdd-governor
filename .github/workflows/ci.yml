@@ -30,7 +30,7 @@ jobs:
           python-version: '3.12'
       - run: python -m venv .venv-py && .venv-py/bin/pip install "pytest>=8" pytest-timeout "mutmut>=3.8,<4"
       - run: npm test
-      # red-before-green is skipped in CI (it needs the local ledger); this runs green,
-      # diff-audit and, when enabled in .governor/config.json, mutation.
+      # Runs green, red-at-base (changed tests must fail against the base source), diff-audit
+      # and, when enabled in .governor/config.json, mutation.
       - name: Gate
         run: node dist/cli.js gate ci
