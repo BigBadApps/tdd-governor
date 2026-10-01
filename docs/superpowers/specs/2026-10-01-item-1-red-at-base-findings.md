@@ -4,8 +4,8 @@
 |---|---|---|
 | Assertion red at base passes; pass at base blocks; weak red warns; tests-only exempt | Pass | test: `test/gates/red-at-base.test.ts` (pure gate behaviors) and `test/e2e.ci.test.ts` (end-to-end execution through `gate ci`) |
 | Caller checkout and worktree list untouched; hooks not fired | Pass | test: `test/base-worktree.test.ts` (isolation, thrown cleanup, `core.hooksPath=/dev/null`) and `test/e2e.ci.test.ts` (`'leaves the checkout and worktree list untouched'`) |
-| This PR's own CI run executed `red-at-base` on this repo | Pass | live-observed: PR #16 run `36922781330` executed `red-at-base` against base source and passed |
-| CI wall time for `gate ci` on this PR vs previous merged PR | Observed | live-observed: PR #15 run `36917539338` (gate 51s, job 128s) vs PR #16 run `36922781330` (gate 75s, job 160s); gate delta +24s |
+| This PR's own CI run executed `red-at-base` on this repo | Pass | live-observed: PR #16 run `36926241389` (and prior `36922781330`) executed `red-at-base` against base source and passed |
+| CI wall time for `gate ci` on this PR vs previous merged PR | Observed | live-observed: PR #15 run `36917539338` (gate 51s, job 128s) vs PR #16 run `36926241389` (gate ~52s, job 112s) |
 | pytest path through `red-at-base` (python resolved against checkout; isolated import path) | Pass | test: `test/e2e.ci.test.ts` (`'passes a pytest PR when package is imported via simulated editable install'`) verifies extraPythonPath prepends worktree source |
 | Monorepo (`packageRoot`) path through `red-at-base` (isolated workspace dependencies) | Pass | test: `test/e2e.ci.test.ts` (`'passes when an app test imports a changed workspace package through its node_modules symlink'`) verifies worktree symlink re-pointing |
 | Remaining G3 surface (local hooks trust the ledger) | Deferred | deferred: local hooks still read `.governor/ledger.jsonl`; CI derives proof independently. |
@@ -13,7 +13,7 @@
 ## Live CI Gate Output
 
 - PR: https://github.com/BigBadApps/tdd-governor/pull/16
-- CI Run URL: https://github.com/BigBadApps/tdd-governor/actions/runs/36922781330
+- CI Run URL: https://github.com/BigBadApps/tdd-governor/actions/runs/36926241389
 
 ```
 [PASS] green
