@@ -96,6 +96,6 @@ class _Recorder:
 
 
 def pytest_configure(config):
-    config.option.continue_on_collection_errors = True
     if not config.pluginmanager.has_plugin("tdd-governor-recorder"):
         config.pluginmanager.register(_Recorder(Path(str(config.rootpath))), "tdd-governor-recorder")
+

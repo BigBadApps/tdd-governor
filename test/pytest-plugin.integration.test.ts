@@ -15,7 +15,7 @@ let record: LedgerRecord;
 beforeAll(() => {
   expect(existsSync(python), `python env missing at ${python}; see Stage 4 Task 2 Step 1`).toBe(true);
   const ledger = path.join(mkdtempSync(path.join(tmpdir(), 'gov-py-')), 'ledger.jsonl');
-  const res = spawnSync(python, ['-m', 'pytest', '-p', 'tdd_governor_pytest', '-q', fixture], {
+  const res = spawnSync(python, ['-m', 'pytest', '-p', 'tdd_governor_pytest', '--continue-on-collection-errors', '-q', fixture], {
     cwd: fixture,
     env: { ...process.env, PYTHONPATH: path.join(repo, 'python'), GOVERNOR_LEDGER_PATH: ledger, GOVERNOR_RUN_ID: 'py-run' },
     encoding: 'utf8',
