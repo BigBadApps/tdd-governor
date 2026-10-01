@@ -4,6 +4,7 @@ import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import picomatch from 'picomatch';
+import { runPytest } from './adapters/pytest/run.js';
 import { runVitest } from './adapters/vitest/run.js';
 import { loadConfig, packageOf, type GovernorConfig } from './config.js';
 import type { FileDiff } from './diff.js';
@@ -48,9 +49,10 @@ function packageLedger(root: string, config: GovernorConfig): { records: LedgerR
 }
 
 function runTests(config: GovernorConfig, root: string, extraArgs: string[] = []): RunOutcome {
-  if (config.adapter !== 'vitest') return { kind: 'unavailable', reason: `adapter '${config.adapter}' is not implemented yet` };
   const pkg = packageOf(root, config);
-  const outcome = runVitest(pkg.dir, config.runTimeoutMs, extraArgs);
+  const outcome = config.adapter === 'vitest'
+    ? runVitest(pkg.dir, config.runTimeoutMs, extraArgs)
+    : runPytest(pkg.dir, config.pytest!.python, config.runTimeoutMs, extraArgs);
   return outcome.kind === 'completed' ? { kind: 'completed', record: toRepoRecords([outcome.record], pkg.toRepo)[0]! } : outcome;
 }
 
