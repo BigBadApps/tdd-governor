@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import picomatch from 'picomatch';
@@ -15,6 +15,7 @@ import { changedLines, ciBase, commitDiff, evidenceSince, pushBase, pushDiff, re
 import { installHooks, PRIMER_FILE } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
 import { runStryker } from './mutation/stryker.js';
+import { findVitestConfig, reporterWarning } from './primer.js';
 import { decide, formatResults } from './report.js';
 import type { GateResult, LedgerRecord, RunOutcome } from './types.js';
 
@@ -224,7 +225,17 @@ export function main(argv: string[]): number {
       { name: 'pre-push', command: 'gate push' },
     ], packageOf(root, loaded.config).rel);
     messages.forEach((m) => console.log(`governor: ${m}`));
+    if (loaded.config.adapter === 'vitest') {
+      const pkg = packageOf(root, loaded.config);
+      const found = findVitestConfig(pkg.dir, existsSync);
+      const warning = reporterWarning(
+        found && (pkg.rel === '.' ? found : path.posix.join(pkg.rel, found)),
+        found && readFileSync(path.join(pkg.dir, found), 'utf8'),
+      );
+      if (warning) console.log(`governor: ${warning}`);
+    }
     return ok ? 0 : 1;
+
   }
 
   return 2; // unreachable: `known` covers every command above

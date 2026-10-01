@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { installHooks } from '../src/install.js';
+import { renderPrimer, reporterWarning } from '../src/primer.js';
 
 const repo = () => {
   const root = mkdtempSync(path.join(tmpdir(), 'gov-install-'));
@@ -187,3 +188,31 @@ describe('installHooks refuses a foreign hook', () => {
     expect(run.status).toBe(0);
   });
 });
+
+describe('reporterWarning', () => {
+  it('is silent when the config loads the reporter by package name', () => {
+    expect(reporterWarning('vitest.config.ts', "import R from 'tdd-governor/vitest-reporter';")).toBeUndefined();
+  });
+
+  it('is silent when the config loads the reporter by path', () => {
+    expect(reporterWarning('vitest.config.ts', "import R from '../dist/adapters/vitest/reporter.js';")).toBeUndefined();
+  });
+
+  it('names the config and the fix when the reporter is missing', () => {
+    const w = reporterWarning('frontend/vite.config.ts', 'export default {}');
+    expect(w).toMatch(/frontend\/vite\.config\.ts/);
+    expect(w).toMatch(/governor run/);
+    expect(w).toMatch(/tdd-governor\/vitest-reporter/);
+  });
+
+  it('warns when no vitest config was found', () => {
+    expect(reporterWarning(undefined, undefined)).toMatch(/no vitest config/);
+  });
+});
+
+describe('primer', () => {
+  it('tells agents that `governor run` always records', () => {
+    expect(renderPrimer('vitest.config.ts')).toContain('npx governor run -- <test files>');
+  });
+});
+
