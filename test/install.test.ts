@@ -198,6 +198,12 @@ describe('reporterWarning', () => {
     expect(reporterWarning('vitest.config.ts', "import R from '../dist/adapters/vitest/reporter.js';")).toBeUndefined();
   });
 
+  it('is silent when the config finds the reporter through the install pointer', () => {
+    const config = "const cli = readFileSync(path.join(gitDir, 'tdd-governor-cli-path'), 'utf8');\n"
+      + "const reporter = path.join(path.dirname(cli), 'adapters', 'vitest', 'reporter.js');";
+    expect(reporterWarning('frontend/vite.config.js', config)).toBeUndefined();
+  });
+
   it('names the config and the fix when the reporter is missing', () => {
     const w = reporterWarning('frontend/vite.config.ts', 'export default {}');
     expect(w).toMatch(/frontend\/vite\.config\.ts/);
