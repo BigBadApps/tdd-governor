@@ -30,13 +30,12 @@ export function parseMutmut(
     const formattedDiff = filePath && !diff.includes('diff --git ') ? `diff --git a/${filePath} b/${filePath}\n${diff}` : diff;
 
     // mutmut 3.x diffs are function-relative. Resolve startLine using Python AST function offsets if provided.
-    // Mutant key format: <module>.x_<func>__mutmut_<N> or <module>.x_<Class>__<method>__mutmut_<N>
-    const funcMatch = /\.x_([A-Za-z0-9_]+)__mutmut_/.exec(m[1]!);
-    const rawFuncName = funcMatch ? funcMatch[1]! : '';
+    // Mutant key format: <module>.x_<func>__mutmut_<N> or <module>.xǁ<Class>ǁ<method>__mutmut_<N>
+    // (\u01c1 is mutmut's CLASS_NAME_SEPARATOR)
+    const funcMatch = /\.x(?:_([A-Za-z0-9_]+)|\u01c1([A-Za-z0-9_]+)\u01c1([A-Za-z0-9_]+))__mutmut_/.exec(m[1]!);
+    const lookupKey = funcMatch ? (funcMatch[1] ?? `${funcMatch[2]}__${funcMatch[3]}`) : '';
     const fileOffsets = filePath && offsets ? offsets[filePath] ?? offsets[filePath.replace(/^\.\//, '')] : undefined;
-    const funcStartLine = fileOffsets
-      ? fileOffsets[rawFuncName] ?? (rawFuncName.includes('__') ? fileOffsets[rawFuncName.split('__')[1]!] : undefined)
-      : undefined;
+    const funcStartLine = fileOffsets ? fileOffsets[lookupKey] : undefined;
     const lineOffset = funcStartLine !== undefined ? funcStartLine - 1 : 0;
 
     for (const f of parseUnifiedDiff(formattedDiff)) {
@@ -68,7 +67,7 @@ export function getFunctionOffsets(
     '        with open(path, "r", encoding="utf-8") as f:',
     '            tree = ast.parse(f.read())',
     '        funcs = {}',
-    '        for node in ast.walk(tree):',
+    '        for node in tree.body:',
     '            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):',
     '                start = node.decorator_list[0].lineno if node.decorator_list else node.lineno',
     '                funcs[node.name] = start',
@@ -77,7 +76,6 @@ export function getFunctionOffsets(
     '                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):',
     '                        start = child.decorator_list[0].lineno if child.decorator_list else child.lineno',
     '                        funcs[f"{node.name}__{child.name}"] = start',
-    '                        funcs[child.name] = start',
     '        result[path] = funcs',
     '    except Exception:',
     '        pass',

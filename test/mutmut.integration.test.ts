@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { mutation } from '../src/gates/mutation.js';
-import { parseMutmut, runMutmut } from '../src/mutation/mutmut.js';
+import { getFunctionOffsets, parseMutmut, runMutmut } from '../src/mutation/mutmut.js';
 
 const out = path.resolve(__dirname, 'fixtures/mutmut-output');
 const repo = path.resolve(__dirname, '..');
@@ -40,6 +40,45 @@ describe('parseMutmut (captured output)', () => {
     expect(mutants[0]?.file).toBe('backend/scoring.py');
     expect(mutants[0]?.startLine).toBe(228);
     expect(mutants[0]?.status).toBe('survived');
+  });
+
+  it('resolves class method and same-named module function offsets placed below line 1', () => {
+    const results = readFileSync(path.join(out, 'results-service.txt'), 'utf8');
+    const shows = Object.fromEntries(
+      readdirSync(out)
+        .filter((f) => f.startsWith('show-service.'))
+        .map((f) => [f.slice(5, -5), readFileSync(path.join(out, f), 'utf8')]),
+    );
+    const offsets = {
+      'src/service.py': {
+        Worker__execute: 5,
+        execute: 11,
+      },
+    };
+    const mutants = parseMutmut(results, (name) => shows[name] ?? '', offsets);
+    const survivors = mutants.filter((m) => m.status === 'survived');
+    expect(survivors).toHaveLength(2);
+
+    const methodMutant = survivors.find((m) => m.mutator.includes('Worker'));
+    expect(methodMutant).toBeDefined();
+    expect(methodMutant?.file).toBe('src/service.py');
+    expect(methodMutant?.startLine).toBe(6);
+
+    const funcMutant = survivors.find((m) => !m.mutator.includes('Worker'));
+    expect(funcMutant).toBeDefined();
+    expect(funcMutant?.file).toBe('src/service.py');
+    expect(funcMutant?.startLine).toBe(12);
+  });
+});
+
+describe('getFunctionOffsets', () => {
+  it('stores plain names for module-level functions only', () => {
+    const root = path.resolve(__dirname, 'fixtures/mutmut-project');
+    const offsets = getFunctionOffsets(root, python, ['src/service.py']);
+    expect(offsets['src/service.py']).toEqual({
+      Worker__execute: 5,
+      execute: 11,
+    });
   });
 });
 

@@ -45,4 +45,15 @@ describe('runPytest', () => {
       expect(readLedger(ledger).records.filter((r) => r.runId === outcome.record.runId)).toHaveLength(1);
     }
   });
+
+  it('passes --rootdir to pin rootdir even without a pytest.ini', () => {
+    const childProject = path.join(repo, 'test/fixtures/pytest-parent-project/child');
+    const ledger = path.join(mkdtempSync(path.join(tmpdir(), 'gov-rp4-')), 'l.jsonl');
+    process.env.GOVERNOR_LEDGER_PATH = ledger;
+    const outcome = runPytest(childProject, python, 60_000, ['-q', 'test_child.py']);
+    expect(outcome.kind).toBe('completed');
+    if (outcome.kind === 'completed') {
+      expect(outcome.record.tests[0]?.file).toBe('test_child.py');
+    }
+  });
 });

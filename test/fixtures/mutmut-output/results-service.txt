@@ -1,0 +1,2 @@
+    service.xǁWorkerǁexecute__mutmut_1: survived
+    service.x_execute__mutmut_1: survived
