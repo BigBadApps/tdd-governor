@@ -110,10 +110,11 @@ Records the override (gate and reason) to the ledger instead of blocking. An emp
 
 [`templates/governor-ci.yml`](templates/governor-ci.yml) is a workflow to copy into a client repo; its header lists the setup steps. It runs `gate ci` on pull requests. Require the `governor / gate` check in branch protection to make it blocking.
 
-Two limits to know about:
+Limits to know about:
 
 - CI does not read the local ledger. It re-derives red evidence with `red-at-base` instead, which no local process can forge.
 - In the throwaway base worktree, workspace dependencies and Python package paths are re-routed to the worktree's reverted source so tests do not inadvertently import HEAD code from the checkout.
+- Hooks installed into `.git/hooks` are shared by every branch and worktree of the repo. On a branch without `.governor/config.json` (one that predates the install, say), `gate commit` reports `GATE_UNAVAILABLE` and blocks every commit. Bring the config onto that branch (merge or rebase onto one that has it). A tracked hooks dir (`core.hooksPath`) avoids this, because branches without the hooks have none.
 - This repo's own [ci workflow](.github/workflows/ci.yml) gates itself with the build from the PR.
 
 ## Primer
