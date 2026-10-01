@@ -34,7 +34,9 @@ Add `.governor/config.json` at the repo root:
 
 ### 2. Reporter
 
-The governor learns what happened in a test run from a vitest reporter. **`install` does not add it for you.** In your vitest config set both:
+The governor passes its own vitest reporter on the command line whenever it runs tests (`governor run`, every gate), so the gates work without any vitest config change.
+
+To also record the test runs you or your agent start with plain `vitest run`, wire the reporter into your vitest config:
 
 ```ts
 import GovernorReporter from 'tdd-governor/vitest-reporter';
@@ -47,7 +49,7 @@ export default defineConfig({
 });
 ```
 
-Without the reporter, `governor run` reports `GATE_UNAVAILABLE` instead of passing. Because it is a dev dependency, a fresh `npm ci` brings the reporter with it.
+Without it, record red runs with `npx governor run -- <test files>`. `governor install` warns when the config doesn't load the reporter.
 
 ### 3. Hooks
 

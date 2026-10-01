@@ -1,0 +1,9 @@
+# service.xǁWorkerǁexecute__mutmut_1: survived
+--- src/service.py
++++ src/service.py
+@@ -1,4 +1,4 @@
+ def execute(self, val: int) -> int:
+-    if val < 0:
++    if val <= 0:
+         return 0
+     return val

@@ -25,6 +25,10 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run build
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.12'
+      - run: python -m venv .venv-py && .venv-py/bin/pip install "pytest>=8" pytest-timeout "mutmut>=3.8,<4"
       - run: npm test
       # red-before-green is skipped in CI (it needs the local ledger); this runs green,
       # diff-audit and, when enabled in .governor/config.json, mutation.

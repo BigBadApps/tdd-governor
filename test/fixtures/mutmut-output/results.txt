@@ -1,0 +1,2 @@
+    clamp.x_clamp__mutmut_1: survived
+    clamp.x_clamp__mutmut_2: survived

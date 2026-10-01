@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { randomUUID } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import picomatch from 'picomatch';
+import { runPytest } from './adapters/pytest/run.js';
 import { runVitest } from './adapters/vitest/run.js';
 import { loadConfig, packageOf, type GovernorConfig } from './config.js';
 import type { FileDiff } from './diff.js';
@@ -14,7 +15,9 @@ import { redBeforeGreen } from './gates/red-before-green.js';
 import { changedLines, ciBase, commitDiff, evidenceSince, pushBase, pushDiff, repoRoot, stagedFile } from './git.js';
 import { installHooks, PRIMER_FILE } from './install.js';
 import { appendRecord, ledgerPath, readLedger } from './ledger.js';
+import { runMutmut } from './mutation/mutmut.js';
 import { runStryker } from './mutation/stryker.js';
+import { findVitestConfig, reporterWarning } from './primer.js';
 import { decide, formatResults } from './report.js';
 import type { GateResult, LedgerRecord, RunOutcome } from './types.js';
 
@@ -47,9 +50,10 @@ function packageLedger(root: string, config: GovernorConfig): { records: LedgerR
 }
 
 function runTests(config: GovernorConfig, root: string, extraArgs: string[] = []): RunOutcome {
-  if (config.adapter !== 'vitest') return { kind: 'unavailable', reason: `adapter '${config.adapter}' is not implemented yet` };
   const pkg = packageOf(root, config);
-  const outcome = runVitest(pkg.dir, config.runTimeoutMs, extraArgs);
+  const outcome = config.adapter === 'vitest'
+    ? runVitest(pkg.dir, config.runTimeoutMs, extraArgs)
+    : runPytest(pkg.dir, config.pytest!.python, config.runTimeoutMs, extraArgs);
   return outcome.kind === 'completed' ? { kind: 'completed', record: toRepoRecords([outcome.record], pkg.toRepo)[0]! } : outcome;
 }
 
@@ -119,7 +123,7 @@ function mutationGate(root: string, config: GovernorConfig, diff: FileDiff[]): G
   const pkg = packageOf(root, config);
   const run = config.adapter === 'vitest'
     ? runStryker(pkg.dir, [...changed.keys()].map(pkg.toPackage), config.mutation.timeoutMs)
-    : { ok: false as const, error: `mutation for adapter '${config.adapter}' is not implemented yet` };
+    : runMutmut(pkg.dir, config.pytest!.python, [...changed.keys()].map(pkg.toPackage), config.mutation.timeoutMs);
   return run.ok
     ? mutation({ mutants: run.mutants.map((m) => ({ ...m, file: pkg.toRepo(m.file) })), changed })
     : { gate: 'mutation', status: 'GATE_UNAVAILABLE', findings: [{ file: '(mutation)', message: run.error }] };
@@ -224,7 +228,17 @@ export function main(argv: string[]): number {
       { name: 'pre-push', command: 'gate push' },
     ], packageOf(root, loaded.config).rel);
     messages.forEach((m) => console.log(`governor: ${m}`));
+    if (loaded.config.adapter === 'vitest') {
+      const pkg = packageOf(root, loaded.config);
+      const found = findVitestConfig(pkg.dir, existsSync);
+      const warning = reporterWarning(
+        found && (pkg.rel === '.' ? found : path.posix.join(pkg.rel, found)),
+        found && readFileSync(path.join(pkg.dir, found), 'utf8'),
+      );
+      if (warning) console.log(`governor: ${warning}`);
+    }
     return ok ? 0 : 1;
+
   }
 
   return 2; // unreachable: `known` covers every command above

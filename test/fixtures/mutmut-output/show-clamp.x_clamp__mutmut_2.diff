@@ -1,0 +1,11 @@
+# clamp.x_clamp__mutmut_2: survived
+--- src/clamp.py
++++ src/clamp.py
+@@ -1,6 +1,6 @@
+ def clamp(x, lo, hi):
+     if x < lo:
+         return lo
+-    if x > hi:
++    if x >= hi:
+         return hi
+     return x

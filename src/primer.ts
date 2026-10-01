@@ -15,10 +15,10 @@ This repo's git hooks run the governor. Every commit needs three gates green:
 
 ## What counts as a red
 
-A test failure that is an \`expect(...)\` failure (\`AssertionError\`), recorded in \`.governor/ledger.jsonl\`
-by the governor's vitest reporter. Every \`vitest run\` is recorded automatically once it is wired into
-${reporterLine}
-there before trusting a red run). You never write the ledger yourself.
+A test failure that is an \`expect(...)\` failure (\`AssertionError\`), recorded in \`.governor/ledger.jsonl\`.
+\`npx governor run -- <test files>\` always records. A plain \`vitest run\` records only when the governor's
+reporter is wired into ${reporterLine}
+there before trusting a plain run). You never write the ledger yourself.
 
 These are NOT reds, and the commit will be blocked:
 
@@ -88,3 +88,13 @@ const CANDIDATES = ['vitest.config.ts', 'vitest.config.js', 'vitest.config.mts',
 export function findVitestConfig(packageDir: string, existsSync: (p: string) => boolean): string | undefined {
   return CANDIDATES.find((name) => existsSync(`${packageDir}/${name}`));
 }
+
+// install's advice when plain `vitest run` will not record: gates still work (they inject the reporter),
+// but an agent's own red runs would leave no evidence.
+export function reporterWarning(configFile: string | undefined, content: string | undefined): string | undefined {
+  if (content !== undefined && /vitest-reporter|adapters\/vitest\/reporter/.test(content)) return undefined;
+  const where = configFile ? `${configFile} does not load the governor reporter` : 'no vitest config found';
+  return `warning: ${where}, so a plain \`vitest run\` records no evidence. Run tests with \`npx governor run -- <test files>\`, or add \`new GovernorReporter()\` from 'tdd-governor/vitest-reporter' to test.reporters (README, Reporter).`;
+}
+
+

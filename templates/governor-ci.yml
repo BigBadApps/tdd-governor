@@ -2,7 +2,9 @@
 #
 # Setup:
 #   1. Replace GOVERNOR_SHA below with a tdd-governor commit that includes `gate ci`.
-#   2. The client's vitest.config.ts must resolve the reporter from GOVERNOR_HOME.
+#   2. Nothing to add to vitest.config.ts: the governor passes its own reporter. If the
+#      config imports 'tdd-governor/vitest-reporter', keep tdd-governor in devDependencies
+#      so `npm ci` can resolve it.
 #   3. To make the check block merges, require "governor / gate" in branch protection
 #      and protect .github/workflows/.
 #   4. The client needs Stryker installed and configured (`@stryker-mutator/core`,

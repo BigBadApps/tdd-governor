@@ -1,0 +1,9 @@
+# service.x_execute__mutmut_1: survived
+--- src/service.py
++++ src/service.py
+@@ -1,4 +1,4 @@
+ def execute(val: int) -> int:
+-    if val > 100:
++    if val >= 100:
+         return 100
+     return val
