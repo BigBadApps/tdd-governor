@@ -113,6 +113,7 @@ Records the override (gate and reason) to the ledger instead of blocking. An emp
 Two limits to know about:
 
 - CI does not read the local ledger. It re-derives red evidence with `red-at-base` instead, which no local process can forge.
+- In the throwaway base worktree, workspace dependencies and Python package paths are re-routed to the worktree's reverted source so tests do not inadvertently import HEAD code from the checkout.
 - This repo's own [ci workflow](.github/workflows/ci.yml) gates itself with the build from the PR.
 
 ## Primer

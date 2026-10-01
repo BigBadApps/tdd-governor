@@ -6,8 +6,8 @@
 | Caller checkout and worktree list untouched; hooks not fired | Pass | test: `test/base-worktree.test.ts` (isolation, thrown cleanup, `core.hooksPath=/dev/null`) and `test/e2e.ci.test.ts` (`'leaves the checkout and worktree list untouched'`) |
 | This PR's own CI run executed `red-at-base` on this repo | Pass | live-observed: PR #16 run `36922781330` executed `red-at-base` against base source and passed |
 | CI wall time for `gate ci` on this PR vs previous merged PR | Observed | live-observed: PR #15 run `36917539338` (gate 51s, job 128s) vs PR #16 run `36922781330` (gate 75s, job 160s); gate delta +24s |
-| pytest path through `red-at-base` (python resolved against checkout) | Code-reasoned | code-reasoned: `src/cli.ts` points `config.pytest.python` to `path.resolve(pkg.dir, config.pytest.python)`, using absolute path to the main checkout's python interpreter so throwaway worktree without `.venv-py` can execute pytest. Test files mapped via `pkg.toPackage`. |
-| Monorepo (`packageRoot`) path through `red-at-base` | Code-reasoned | code-reasoned: `packageOf` computes `pkg.toPackage` for scoped tests and symlinks `path.posix.join(pkg.rel, 'node_modules')` in addition to root `node_modules` into throwaway worktree. |
+| pytest path through `red-at-base` (python resolved against checkout; isolated import path) | Pass | test: `test/e2e.ci.test.ts` (`'passes a pytest PR when package is imported via simulated editable install'`) verifies extraPythonPath prepends worktree source |
+| Monorepo (`packageRoot`) path through `red-at-base` (isolated workspace dependencies) | Pass | test: `test/e2e.ci.test.ts` (`'passes when an app test imports a changed workspace package through its node_modules symlink'`) verifies worktree symlink re-pointing |
 | Remaining G3 surface (local hooks trust the ledger) | Deferred | deferred: local hooks still read `.governor/ledger.jsonl`; CI derives proof independently. |
 
 ## Live CI Gate Output
@@ -54,6 +54,11 @@
    - The initial plan for `test/e2e.ci.test.ts` `'leaves the checkout and worktree list untouched'` checked that worktrees and checkout state remained clean after running `ci(root)`. However, it did not assert `res.stdout` matched `[PASS] red-at-base`.
    - When executed against base source in CI, `gate ci` at base did not leak worktrees either. Thus, the test passed at base, which `red-at-base` blocked because tests of unchanged behavior must not be in a PR with source changes.
    - Fixed by strengthening the test to assert `expect(res.stdout).toMatch(/\[PASS\] red-at-base/)`. At base, `red-at-base` is not in output, so the test fails at base with an assertion error and passes at HEAD.
+
+2. **Review finding: Base run import isolation for npm workspaces & pytest editable installs:**
+   - Review identified that symlinking `node_modules` wholesale into the base worktree resolves workspace package symlinks (e.g. `node_modules/@acme/lib -> ../../packages/lib`) into the checkout's HEAD source rather than the worktree's reverted source. Similarly, pytest editable installs (`pip install -e .` with `.pth` or `PYTHONPATH=<checkout>/src`) cause tests in the base worktree to import HEAD Python code.
+   - Fixed for Node by constructing `node_modules` in the worktree linking checkout entries while re-pointing workspace symlinks targeting within the checkout to their counterpart inside the worktree (`linkDir` / `linkEntry` in `src/base-worktree.ts`).
+   - Fixed for Python by accepting `extraPythonPath` in `runPytest` and prepending `<wt>/src` and `<wt>` to `PYTHONPATH` ahead of any existing paths so reverted worktree source takes precedence.
 
 ## Deferred
 

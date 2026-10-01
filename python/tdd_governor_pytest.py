@@ -42,12 +42,12 @@ def _git(root: Path, *args: str) -> str | None:
 
 class _Recorder:
     def __init__(self, rootpath: Path) -> None:
-        self.root = rootpath
+        self.root = rootpath.resolve()
         self.tests: dict[str, dict] = {}
         self.collection_errors: list[dict] = []
 
     def _rel(self, path: Path) -> str:
-        return os.path.relpath(path, self.root).replace(os.sep, "/")
+        return os.path.relpath(Path(path).resolve(), self.root).replace(os.sep, "/")
 
     def pytest_collectreport(self, report):
         if report.failed:

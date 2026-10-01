@@ -51,11 +51,11 @@ function packageLedger(root: string, config: GovernorConfig): { records: LedgerR
   return { records: toRepoRecords(records, pkg.toRepo), corrupt };
 }
 
-function runTests(config: GovernorConfig, root: string, extraArgs: string[] = []): RunOutcome {
+function runTests(config: GovernorConfig, root: string, extraArgs: string[] = [], extraPythonPath: string[] = []): RunOutcome {
   const pkg = packageOf(root, config);
   const outcome = config.adapter === 'vitest'
     ? runVitest(pkg.dir, config.runTimeoutMs, extraArgs)
-    : runPytest(pkg.dir, config.pytest!.python, config.runTimeoutMs, extraArgs);
+    : runPytest(pkg.dir, config.pytest!.python, config.runTimeoutMs, extraArgs, extraPythonPath);
   return outcome.kind === 'completed' ? { kind: 'completed', record: toRepoRecords([outcome.record], pkg.toRepo)[0]! } : outcome;
 }
 
@@ -173,7 +173,11 @@ function redAtBaseGate(root: string, config: GovernorConfig, base: string, diff:
   const links = [...new Set(['node_modules', path.posix.join(pkg.rel, 'node_modules')])];
   let outcome: RunOutcome;
   try {
-    outcome = withBaseWorktree(root, base, sources, links, (wt) => runTests(baseConfig, wt, files));
+    outcome = withBaseWorktree(root, base, sources, links, (wt) => {
+      const wtPkg = packageOf(wt, baseConfig);
+      const extraPythonPath = [path.join(wtPkg.dir, 'src'), wtPkg.dir].filter((d) => existsSync(d));
+      return runTests(baseConfig, wt, files, extraPythonPath);
+    });
   } catch (e) {
     outcome = { kind: 'unavailable', reason: `could not prepare the base worktree: ${(e as Error).message}` };
   }
