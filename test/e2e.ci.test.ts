@@ -151,7 +151,8 @@ describe('governor gate ci (e2e)', () => {
     writeFileSync(path.join(root, 'src/add.ts'), 'export const add = (a: number, b: number, c = 0): number => a + b + c;\n');
     writeFileSync(path.join(root, 'tests/add.test.ts'), `${TEST_FILE}\nit('adds three', () => {\n  expect(add(1, 2, 3)).toBe(6);\n});\n`);
     commit(root);
-    ci(root);
+    const res = ci(root);
+    expect(res.stdout).toMatch(/\[PASS\] red-at-base/);
     const g = (...a: string[]) => execFileSync('git', a, { cwd: root, encoding: 'utf8' });
     expect(g('status', '--porcelain')).toBe('');
     expect(g('worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1);
