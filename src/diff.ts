@@ -90,11 +90,20 @@ export function mergeScoped(ours: FileDiff[], theirs: FileDiff[][]): FileDiff[] 
     const others = theirs.map((d) => d.find((o) => o.path === f.path));
     if (others.some((o) => o === undefined)) return [];
     const added = f.added.filter((a) => others.every((o) => o!.added.some((b) => b.line === a.line)));
-    const unmatched = others.map((o) => o!.removed.map((b) => b.text));
+    const unmatched = others.map((o) => {
+      const counts = new Map<string, number>();
+      for (const b of o!.removed) {
+        counts.set(b.text, (counts.get(b.text) ?? 0) + 1);
+      }
+      return counts;
+    });
     const removed = f.removed.filter((r) => {
-      const at = unmatched.map((texts) => texts.indexOf(r.text));
-      if (at.some((i) => i < 0)) return false;
-      at.forEach((i, k) => unmatched[k]!.splice(i, 1));
+      for (const counts of unmatched) {
+        if (!counts.get(r.text)) return false;
+      }
+      for (const counts of unmatched) {
+        counts.set(r.text, counts.get(r.text)! - 1);
+      }
       return true;
     });
     const status = others.every((o) => o!.status === f.status) ? f.status : 'modified';
