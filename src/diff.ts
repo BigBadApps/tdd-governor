@@ -89,7 +89,10 @@ export function mergeScoped(ours: FileDiff[], theirs: FileDiff[][]): FileDiff[] 
   return ours.flatMap((f) => {
     const others = theirs.map((d) => d.find((o) => o.path === f.path));
     if (others.some((o) => o === undefined)) return [];
-    const added = f.added.filter((a) => others.every((o) => o!.added.some((b) => b.line === a.line)));
+
+    const othersAddedSets = others.map((o) => new Set(o!.added.map((b) => b.line)));
+    const added = f.added.filter((a) => othersAddedSets.every((set) => set.has(a.line)));
+
     const unmatched = others.map((o) => o!.removed.map((b) => b.text));
     const removed = f.removed.filter((r) => {
       const at = unmatched.map((texts) => texts.indexOf(r.text));
