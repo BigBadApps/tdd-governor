@@ -14,9 +14,10 @@ export function redAtBase(input: { scoped: TestResult[]; sourceChanged: boolean;
   const findings: Finding[] = [];
   let block = false;
   let undecided = false;
+  const testResultsById = new Map(record.tests.map(t => [t.id, t]));
   for (const t of input.scoped) {
     const where = { file: t.file, ...(t.line !== undefined && { line: t.line }) };
-    const result = record.tests.find((x) => x.id === t.id);
+    const result = testResultsById.get(t.id);
     if (result?.status === 'fail' && result.failureKind === 'assertion') continue;
     if (result?.status === 'pass') {
       block = true;
