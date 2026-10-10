@@ -89,14 +89,28 @@ export function mergeScoped(ours: FileDiff[], theirs: FileDiff[][]): FileDiff[] 
   return ours.flatMap((f) => {
     const others = theirs.map((d) => d.find((o) => o.path === f.path));
     if (others.some((o) => o === undefined)) return [];
-    const added = f.added.filter((a) => others.every((o) => o!.added.some((b) => b.line === a.line)));
-    const unmatched = others.map((o) => o!.removed.map((b) => b.text));
+
+    const othersAddedSets = others.map((o) => new Set(o!.added.map((b) => b.line)));
+    const added = f.added.filter((a) => othersAddedSets.every((s) => s.has(a.line)));
+
+    const unmatchedCounts = others.map((o) => {
+      const counts = new Map<string, number>();
+      for (const b of o!.removed) {
+        counts.set(b.text, (counts.get(b.text) ?? 0) + 1);
+      }
+      return counts;
+    });
+
     const removed = f.removed.filter((r) => {
-      const at = unmatched.map((texts) => texts.indexOf(r.text));
-      if (at.some((i) => i < 0)) return false;
-      at.forEach((i, k) => unmatched[k]!.splice(i, 1));
+      for (const counts of unmatchedCounts) {
+        if ((counts.get(r.text) ?? 0) === 0) return false;
+      }
+      for (const counts of unmatchedCounts) {
+        counts.set(r.text, counts.get(r.text)! - 1);
+      }
       return true;
     });
+
     const status = others.every((o) => o!.status === f.status) ? f.status : 'modified';
     return added.length > 0 || removed.length > 0 || status === 'deleted' ? [{ path: f.path, status, added, removed }] : [];
   });
