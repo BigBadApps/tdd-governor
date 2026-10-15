@@ -66,6 +66,20 @@ export function redBeforeGreen(input: {
   let undecided = false;
   const windowed = input.records.filter((r) => r.at >= input.sinceIso);
 
+  const failedTestsById = new Map<string, TestResult[]>();
+  for (const r of windowed) {
+    for (const t of r.tests) {
+      if (t.status === 'fail') {
+        let fails = failedTestsById.get(t.id);
+        if (!fails) {
+          fails = [];
+          failedTestsById.set(t.id, fails);
+        }
+        fails.push(t);
+      }
+    }
+  }
+
   for (const f of input.diff) {
     if (!input.isTestFile(f.path) || f.status === 'deleted' || f.added.length === 0) continue;
 
@@ -90,7 +104,7 @@ export function redBeforeGreen(input: {
     }
 
     for (const test of inScope) {
-      const fails = windowed.flatMap((r) => r.tests.filter((x) => x.id === test.id && x.status === 'fail'));
+      const fails = failedTestsById.get(test.id) ?? [];
       if (fails.some((x) => x.failureKind === 'assertion')) continue;
       const where = { file: test.file, ...(test.line !== undefined && { line: test.line }) };
       if (fails.some((x) => x.failureKind === 'unknown')) {
