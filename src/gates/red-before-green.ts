@@ -1,5 +1,5 @@
 import type { FileDiff } from '../diff.js';
-import type { Finding, GateResult, LedgerRecord, TestResult } from '../types.js';
+import type { Finding, GateResult, GateStatus, LedgerRecord, TestResult } from '../types.js';
 
 function latestTestsFor(file: string, records: LedgerRecord[]): TestResult[] {
   for (let i = records.length - 1; i >= 0; i--) {
@@ -54,6 +54,42 @@ export function scopeOf(f: FileDiff, tests: TestResult[], source: string | undef
   return testsTouched(tests, f.added.map((a) => a.line), source);
 }
 
+function assessTest(test: TestResult, windowed: LedgerRecord[]): { status: GateStatus; finding?: Finding } {
+  const fails = windowed.flatMap((r) => r.tests.filter((x) => x.id === test.id && x.status === 'fail'));
+  if (fails.some((x) => x.failureKind === 'assertion')) return { status: 'PASS' };
+
+  const where = { file: test.file, ...(test.line !== undefined && { line: test.line }) };
+  if (fails.some((x) => x.failureKind === 'unknown')) {
+    return {
+      status: 'UNDECIDED',
+      finding: { ...where, message: `${test.id}: only unclassified failures recorded` },
+    };
+  }
+
+  const kindSet = new Set(fails.map((x) => x.failureKind));
+  const kinds = [...kindSet].join(', ');
+  const failedToImport = windowed.some((r) => r.collectionErrors.some((e) => e.file === test.file));
+  const stub = 'stub the implementation (exports present, wrong values) so an expect() fails';
+  const onlyTimedOut = fails.length > 0 && kindSet.size === 1 && kindSet.has('timeout');
+  const cause = kindSet.has('timeout')
+    ? `a timeout is not a valid red; make it fail fast on an assertion instead, or fix the timeout separately`
+    : `a missing export or thrown error is not a valid red; ${stub}`;
+
+  return {
+    status: 'BLOCK',
+    finding: {
+      ...where,
+      message: onlyTimedOut
+        ? `${test.id}: only timed out: not a valid red; make it fail fast on an assertion instead`
+        : fails.length > 0
+          ? `${test.id}: only failed with ${kinds}: ${cause}`
+          : failedToImport
+            ? `${test.id}: never seen failing (the file failed to import, which is not a valid red): ${stub}`
+            : `${test.id}: never seen failing: run it red (failing assertion) before implementing`,
+    },
+  };
+}
+
 export function redBeforeGreen(input: {
   diff: FileDiff[];
   isTestFile: (path: string) => boolean;
@@ -90,34 +126,10 @@ export function redBeforeGreen(input: {
     }
 
     for (const test of inScope) {
-      const fails = windowed.flatMap((r) => r.tests.filter((x) => x.id === test.id && x.status === 'fail'));
-      if (fails.some((x) => x.failureKind === 'assertion')) continue;
-      const where = { file: test.file, ...(test.line !== undefined && { line: test.line }) };
-      if (fails.some((x) => x.failureKind === 'unknown')) {
-        undecided = true;
-        findings.push({ ...where, message: `${test.id}: only unclassified failures recorded` });
-        continue;
-      }
-      block = true;
-      const kindSet = new Set(fails.map((x) => x.failureKind));
-      const kinds = [...kindSet].join(', ');
-      const failedToImport = windowed.some((r) => r.collectionErrors.some((e) => e.file === test.file));
-      const stub = 'stub the implementation (exports present, wrong values) so an expect() fails';
-      const onlyTimedOut = fails.length > 0 && kindSet.size === 1 && kindSet.has('timeout');
-      const cause = kindSet.has('timeout')
-        ? `a timeout is not a valid red; make it fail fast on an assertion instead, or fix the timeout separately`
-        : `a missing export or thrown error is not a valid red; ${stub}`;
-      findings.push({
-        ...where,
-        message:
-          onlyTimedOut
-            ? `${test.id}: only timed out: not a valid red; make it fail fast on an assertion instead`
-            : fails.length > 0
-            ? `${test.id}: only failed with ${kinds}: ${cause}`
-            : failedToImport
-              ? `${test.id}: never seen failing (the file failed to import, which is not a valid red): ${stub}`
-              : `${test.id}: never seen failing: run it red (failing assertion) before implementing`,
-      });
+      const assessment = assessTest(test, windowed);
+      if (assessment.status === 'BLOCK') block = true;
+      if (assessment.status === 'UNDECIDED') undecided = true;
+      if (assessment.finding) findings.push(assessment.finding);
     }
   }
 
