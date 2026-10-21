@@ -7,11 +7,9 @@ import { git } from './git.js';
 // Client post-checkout hooks (LFS, husky) must not fire for a checkout the governor makes and throws away.
 const NO_HOOKS = ['-c', 'core.hooksPath=/dev/null'];
 
-function linkEntry(root: string, wt: string, src: string, dst: string): void {
-  if (existsSync(dst)) return;
+function linkEntry(root: string, wt: string, src: string, dst: string, isSymbolicLink?: boolean): void {
   try {
-    const stat = lstatSync(src);
-    if (stat.isSymbolicLink()) {
+    if (isSymbolicLink ?? lstatSync(src).isSymbolicLink()) {
       const linkTarget = readlinkSync(src);
       const resolved = path.resolve(path.dirname(src), linkTarget);
       const relToRoot = path.relative(root, resolved);
@@ -24,7 +22,11 @@ function linkEntry(root: string, wt: string, src: string, dst: string): void {
   } catch {
     // If lstat or readlink fails, fall back to direct symlink
   }
-  symlinkSync(src, dst);
+  try {
+    symlinkSync(src, dst);
+  } catch (err: any) {
+    if (err.code !== 'EEXIST') throw err;
+  }
 }
 
 function linkDir(root: string, wt: string, rel: string): void {
@@ -45,10 +47,10 @@ function linkDir(root: string, wt: string, rel: string): void {
     if (dirent.name.startsWith('@') && (dirent.isDirectory() || dirent.isSymbolicLink())) {
       mkdirSync(dst, { recursive: true });
       for (const sub of readdirSync(src, { withFileTypes: true })) {
-        linkEntry(root, wt, path.join(src, sub.name), path.join(dst, sub.name));
+        linkEntry(root, wt, path.join(src, sub.name), path.join(dst, sub.name), sub.isSymbolicLink());
       }
     } else {
-      linkEntry(root, wt, src, dst);
+      linkEntry(root, wt, src, dst, dirent.isSymbolicLink());
     }
   }
 }
