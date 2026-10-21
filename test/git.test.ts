@@ -4,7 +4,14 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { FileDiff } from '../src/diff.js';
-import { changedLines, ciBase, commitDiff, mergeHeads, nestedWorktrees, pushBase, pushDiff, stagedDiff } from '../src/git.js';
+import { changedLines, ciBase, commitDiff, mergeHeads, nestedWorktrees, pushBase, pushDiff, repoRoot, stagedDiff } from '../src/git.js';
+
+describe('repoRoot', () => {
+  it('throws an error when not in a git repository', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'gov-not-repo-'));
+    expect(() => repoRoot(root)).toThrow('not a git repository');
+  });
+});
 
 describe('ciBase', () => {
   function repo() {
