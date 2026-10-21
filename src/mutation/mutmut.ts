@@ -60,9 +60,8 @@ export function getFunctionOffsets(
   files: string[],
 ): Record<string, Record<string, number>> {
   const pyCode = [
-    'import ast, json, sys',
-    'result = {}',
-    'for path in sys.argv[1:]:',
+    'import ast, json, sys, concurrent.futures',
+    'def process_file(path):',
     '    try:',
     '        with open(path, "r", encoding="utf-8") as f:',
     '            tree = ast.parse(f.read())',
@@ -76,10 +75,16 @@ export function getFunctionOffsets(
     '                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)):',
     '                        start = child.decorator_list[0].lineno if child.decorator_list else child.lineno',
     '                        funcs[f"{node.name}__{child.name}"] = start',
-    '        result[path] = funcs',
+    '        return path, funcs',
     '    except Exception:',
-    '        pass',
-    'print(json.dumps(result))',
+    '        return path, None',
+    'result = {}',
+    'if __name__ == "__main__":',
+    '    with concurrent.futures.ThreadPoolExecutor() as executor:',
+    '        for path, funcs in executor.map(process_file, sys.argv[1:]):',
+    '            if funcs is not None:',
+    '                result[path] = funcs',
+    '    print(json.dumps(result))',
   ].join('\n');
   const res = spawnSync(path.resolve(root, python), ['-c', pyCode, ...files], { cwd: root, encoding: 'utf8' });
   if (res.status === 0 && res.stdout) {
