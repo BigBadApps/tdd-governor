@@ -80,6 +80,27 @@ describe('getFunctionOffsets', () => {
       execute: 11,
     });
   });
+
+  it('returns empty object when python output is invalid json', () => {
+    const root = path.resolve(__dirname, 'fixtures/mutmut-project');
+
+    // Create a temporary executable that outputs invalid JSON and exits 0
+    const isWin = process.platform === 'win32';
+    const pyName = isWin ? 'bad-python.cmd' : 'bad-python';
+    const pyContent = isWin ? '@echo off\necho {invalid json\nexit 0' : '#!/bin/sh\necho "{invalid json"\nexit 0';
+    const pyPath = path.join(root, pyName);
+
+    const fs = require('node:fs');
+    fs.writeFileSync(pyPath, pyContent);
+    if (!isWin) fs.chmodSync(pyPath, 0o755);
+
+    try {
+      const offsets = getFunctionOffsets(root, pyPath, ['src/service.py']);
+      expect(offsets).toEqual({});
+    } finally {
+      fs.rmSync(pyPath, { force: true });
+    }
+  });
 });
 
 describe('runMutmut (real mutmut)', () => {
