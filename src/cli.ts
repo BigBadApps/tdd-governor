@@ -218,6 +218,23 @@ function gateCi(root: string, baseFlag: string | undefined): number {
   return finish(root, config, results, undefined);
 }
 
+function commandRun(root: string, rest: string[]): number {
+  const loaded = loadConfig(root);
+  if (!loaded.ok) {
+    console.error(`governor: ${loaded.error}`);
+    return 2;
+  }
+  const outcome = runTests(loaded.config, root, rest);
+  if (outcome.kind === 'unavailable') {
+    console.error(`governor: GATE_UNAVAILABLE: ${outcome.reason}`);
+    return 2;
+  }
+  const { tests, collectionErrors } = outcome.record;
+  const failed = tests.filter((t) => t.status === 'fail').length;
+  console.log(`governor: recorded run ${outcome.record.runId}: ${tests.length} tests, ${failed} failed, ${collectionErrors.length} collection errors`);
+  return outcome.record.exitCode;
+}
+
 export function main(argv: string[]): number {
   const [command, ...rest] = argv;
   const known = command === 'run' || command === 'install' || (command === 'gate' && (rest[0] === 'commit' || rest[0] === 'push' || rest[0] === 'ci'));
@@ -234,23 +251,22 @@ export function main(argv: string[]): number {
   }
 
   if (command === 'run') {
-    const loaded = loadConfig(root);
-    if (!loaded.ok) {
-      console.error(`governor: ${loaded.error}`);
-      return 2;
-    }
-    const outcome = runTests(loaded.config, root, rest);
-    if (outcome.kind === 'unavailable') {
-      console.error(`governor: GATE_UNAVAILABLE: ${outcome.reason}`);
-      return 2;
-    }
-    const { tests, collectionErrors } = outcome.record;
-    const failed = tests.filter((t) => t.status === 'fail').length;
-    console.log(`governor: recorded run ${outcome.record.runId}: ${tests.length} tests, ${failed} failed, ${collectionErrors.length} collection errors`);
-    return outcome.record.exitCode;
+    return commandRun(root, rest);
   }
 
-  if (command === 'gate' && rest[0] === 'ci') {
+  if (command === 'gate') {
+    return commandGate(root, rest);
+  }
+
+  if (command === 'install') {
+    return commandInstall(root);
+  }
+
+  return 2; // unreachable: `known` covers every command above
+}
+
+function commandGate(root: string, rest: string[]): number {
+  if (rest[0] === 'ci') {
     const i = rest.indexOf('--base');
     if (i !== -1 && !rest[i + 1]) {
       console.error('usage: governor gate ci [--base <ref>]');
@@ -259,35 +275,36 @@ export function main(argv: string[]): number {
     return gateCi(root, i === -1 ? undefined : rest[i + 1]);
   }
 
-  if (command === 'gate' && (rest[0] === 'commit' || rest[0] === 'push')) return rest[0] === 'push' ? gatePush(root) : gateCommit(root, rest.includes('--merge') ? process.env : undefined);
-
-  if (command === 'install') {
-    const loaded = loadConfig(root);
-    if (!loaded.ok) {
-      console.error(`governor: ${loaded.error}\nCreate .governor/config.json, for example:\n${EXAMPLE_CONFIG}`);
-      return 2;
-    }
-    const cliPath = realpathSync(fileURLToPath(import.meta.url));
-    const { ok, messages } = installHooks(root, cliPath, [
-      { name: 'pre-commit', command: 'gate commit' },
-      { name: 'pre-merge-commit', command: 'gate commit --merge' },
-      { name: 'pre-push', command: 'gate push' },
-    ], packageOf(root, loaded.config).rel);
-    messages.forEach((m) => console.log(`governor: ${m}`));
-    if (loaded.config.adapter === 'vitest') {
-      const pkg = packageOf(root, loaded.config);
-      const found = findVitestConfig(pkg.dir, existsSync);
-      const warning = reporterWarning(
-        found && (pkg.rel === '.' ? found : path.posix.join(pkg.rel, found)),
-        found && readFileSync(path.join(pkg.dir, found), 'utf8'),
-      );
-      if (warning) console.log(`governor: ${warning}`);
-    }
-    return ok ? 0 : 1;
-
+  if (rest[0] === 'commit' || rest[0] === 'push') {
+    return rest[0] === 'push' ? gatePush(root) : gateCommit(root, rest.includes('--merge') ? process.env : undefined);
   }
 
-  return 2; // unreachable: `known` covers every command above
+  return 2;
+}
+
+function commandInstall(root: string): number {
+  const loaded = loadConfig(root);
+  if (!loaded.ok) {
+    console.error(`governor: ${loaded.error}\nCreate .governor/config.json, for example:\n${EXAMPLE_CONFIG}`);
+    return 2;
+  }
+  const cliPath = realpathSync(fileURLToPath(import.meta.url));
+  const { ok, messages } = installHooks(root, cliPath, [
+    { name: 'pre-commit', command: 'gate commit' },
+    { name: 'pre-merge-commit', command: 'gate commit --merge' },
+    { name: 'pre-push', command: 'gate push' },
+  ], packageOf(root, loaded.config).rel);
+  messages.forEach((m) => console.log(`governor: ${m}`));
+  if (loaded.config.adapter === 'vitest') {
+    const pkg = packageOf(root, loaded.config);
+    const found = findVitestConfig(pkg.dir, existsSync);
+    const warning = reporterWarning(
+      found && (pkg.rel === '.' ? found : path.posix.join(pkg.rel, found)),
+      found && readFileSync(path.join(pkg.dir, found), 'utf8'),
+    );
+    if (warning) console.log(`governor: ${warning}`);
+  }
+  return ok ? 0 : 1;
 }
 
 const invokedDirectly = process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url);
