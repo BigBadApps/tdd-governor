@@ -86,8 +86,14 @@ export function parseUnifiedDiff(text: string): FileDiff[] {
 // Merge commit: keep only what is new against every parent. Added lines share the index's numbering across
 // the diffs; removed lines are numbered per parent, so they are matched by text, each parent line used once.
 export function mergeScoped(ours: FileDiff[], theirs: FileDiff[][]): FileDiff[] {
+  const theirsMaps = theirs.map((d) => {
+    const map = new Map<string, FileDiff>();
+    for (const f of d) map.set(f.path, f);
+    return map;
+  });
+
   return ours.flatMap((f) => {
-    const others = theirs.map((d) => d.find((o) => o.path === f.path));
+    const others = theirsMaps.map((m) => m.get(f.path));
     if (others.some((o) => o === undefined)) return [];
     const added = f.added.filter((a) => others.every((o) => o!.added.some((b) => b.line === a.line)));
     const unmatched = others.map((o) => o!.removed.map((b) => b.text));
