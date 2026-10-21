@@ -51,13 +51,13 @@ export function installHooks(
       messages.push(`refusing to overwrite existing ${name} hook at ${file}; add these lines to it yourself:\n${hookSnippet(command)}`);
       continue;
     }
-    writeFileSync(file, hookScript(command));
-    chmodSync(file, 0o755);
+    writeFileSync(file, hookScript(command), { mode: 0o700 });
+    chmodSync(file, 0o700);
     messages.push(`installed ${name} → governor ${command}`);
   }
 
   const pointer = path.resolve(root, git(root, ['rev-parse', '--git-common-dir']).trim(), CLI_PATH_FILE);
-  writeFileSync(pointer, `${cliPath}\n`);
+  writeFileSync(pointer, `${cliPath}\n`, { mode: 0o600 });
   messages.push(`wrote ${CLI_PATH_FILE} in the git directory: this machine's governor, shared by every worktree and kept out of the tracked hook`);
 
   const packageDir = path.join(root, packageRel);
