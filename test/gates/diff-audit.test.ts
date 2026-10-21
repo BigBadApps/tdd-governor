@@ -55,7 +55,11 @@ describe('diffAudit', () => {
   it('blocks lowering or removing expect.assertions', () => {
     expect(audit(file('tests/a.test.ts', ['  expect.assertions(1);'], ['  expect.assertions(3);'])).status).toBe('BLOCK');
     expect(audit(file('tests/a.test.ts', [], ['  expect.assertions(2);'])).status).toBe('BLOCK');
+  });
+
+  it('passes when adding or increasing expect.assertions', () => {
     expect(audit(file('tests/a.test.ts', ['  expect.assertions(4);'], ['  expect.assertions(3);'])).status).toBe('PASS');
+    expect(audit(file('tests/a.test.ts', ['  expect.assertions(1);'], [])).status).toBe('PASS');
   });
 
   it('warns but passes on snapshot changes', () => {
