@@ -1,6 +1,9 @@
-// Written to .governor/PRIMER.md by `governor install`. Agents that hit a block read this instead of the governor's source.
-// configFile: the vitest/vite config install found the reporter should be wired into (repo-relative, package-scoped
-// for a monorepo), or undefined when none was found — then the wording stays generic rather than naming a guess.
+/**
+ * Written to .governor/PRIMER.md by `governor install`. Agents that hit a block read this instead of the governor's source.
+ *
+ * @param configFile the vitest/vite config install found the reporter should be wired into (repo-relative, package-scoped
+ * for a monorepo), or undefined when none was found — then the wording stays generic rather than naming a guess.
+ */
 export function renderPrimer(configFile: string | undefined): string {
   const reporterLine = configFile
     ? `\`test.reporters\` in \`${configFile}\` (the governor's \`install\` does not add this for you; check it is`
