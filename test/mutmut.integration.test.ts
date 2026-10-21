@@ -69,6 +69,25 @@ describe('parseMutmut (captured output)', () => {
     expect(funcMutant?.file).toBe('src/service.py');
     expect(funcMutant?.startLine).toBe(12);
   });
+
+  it('falls back to 0 line offset when the file is not in offsets', () => {
+    const results = '    backend.scoring.x_score_exposure__mutmut_71: survived\n';
+    const diff = [
+      '# backend.scoring.x_score_exposure__mutmut_71: survived',
+      '--- backend/scoring.py',
+      '+++ backend/scoring.py',
+      '@@ -18,7 +18,7 @@',
+      '     if mean == 999.0:',
+      '-        exposure_score = 0.5',
+      '+        exposure_score = 1.5',
+    ].join('\n');
+    const offsets = { 'other/file.py': { score_exposure: 210 } }; // Missing backend/scoring.py
+    const mutants = parseMutmut(results, () => diff, offsets);
+    expect(mutants).toHaveLength(1);
+    expect(mutants[0]?.file).toBe('backend/scoring.py');
+    expect(mutants[0]?.startLine).toBe(19); // line 18 + 1 - fallback lineOffset is 0, so startLine is 19
+    expect(mutants[0]?.status).toBe('survived');
+  });
 });
 
 describe('getFunctionOffsets', () => {
